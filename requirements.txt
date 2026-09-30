@@ -1,7 +1,7 @@
-streamlit==1.38.0
-pandas==2.2.2
-numpy==1.26.4
-requests==2.32.3
-openpyxl==3.1.5
-xlrd==2.0.1
-pillow==10.4.0
+streamlit>=1.40
+pandas>=2.3
+numpy>=2.1
+requests>=2.32
+openpyxl>=3.1
+xlrd>=2.0
+pillow>=11.0
