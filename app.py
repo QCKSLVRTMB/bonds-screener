@@ -215,6 +215,11 @@ def display_name(col):
     return f"{emoji} {base}".strip()
 
 
+def display_name_short(col):
+    """Название столбца без переносов — для selectbox сортировки."""
+    return display_name(col).replace("\n", " ")
+
+
 def base_from_display(disp):
     parts = disp.split(" ", 1)
     if parts and parts[0] in GROUP_EMOJI.values():
@@ -232,58 +237,33 @@ HELP = {
     "settlement_date": "**Дата расчёта** — от неё считаются сроки до погашения и оферты.",
     "rate_change_pp": (
         "**Прогноз ставки ЦБ** — на сколько п.п. вы ждёте изменения ключевой ставки.\n\n"
-        "**Для чайников:** если ставка упадёт — длинные облигации подорожают. "
-        "Если вырастет — наоборот.\n\n"
-        "**Что означают значения:**\n"
+        "Влияет на «Прогнозную цену», «Потенциальную доходность» и «Рыночный риск».\n\n"
         "• **−1…−2 п.п.** = ставки падают → длинные бумаги выгоднее.\n"
         "• **+1…+2 п.п.** = ставки растут → короткие безопаснее.\n"
-        "• **0** = нейтральный прогноз."
+        "• **0** = нейтрально (включается стресс-тест для «Рыночного риска»)."
     ),
     "ndfl": "**Ставка НДФЛ** — налог на купонный доход. Уменьшает реальную доходность.",
     "cbr_rate": (
-        "**Текущая ставка ЦБ** — базовый ориентир. Всё, что ниже — неинтересно.\n\n"
-        "**Для чайников:** доходность облигации должна быть выше ставки ЦБ, "
-        "иначе смысла нет."
+        "**Текущая ставка ЦБ** — базовый ориентир. Всё, что ниже — неинтересно."
     ),
     "uploaded_file": "**Excel Доход.ру (X)** — файл с метриками качества эмитента, которых нет на MOEX.",
     "industries": "**Отрасль (X)** — сектор экономики. Для диверсификации.",
     "issuer_types": (
-        "**Тип эмитента (X):**\n"
-        "• **Гос** — государство, максимальная надёжность.\n"
-        "• **Субфед** — регион.\n"
-        "• **Муницип** — город.\n"
-        "• **Корп** — частная компания."
+        "**Тип эмитента (X):** Гос / Субфед / Муницип / Корп."
     ),
     "list_levels": "**Уровень листинга** — 1 (самые ликвидные) … 3 (риск низкой ликвидности).",
     "only_with_price": "**Только с ценой** — показывать только бумаги, по которым есть сделки.",
     "only_discount": "**Только дисконт** — цена ниже номинала (100%).",
     "min_spread": (
-        "**Мин. спред, %** — нижняя граница спреда BID/ASK.\n\n"
-        "**Для чайников:** спред — это разница между ценой покупки и продажи. "
-        "Слишком узкий спред (0%) бывает у «мёртвых» бумаг, где нет реальных заявок.\n\n"
-        "**Когда ставить >0:** если хотите отсечь бумаги без реального рынка."
+        "**Мин. спред, %** — нижняя граница спреда BID/ASK. 0 = без ограничения."
     ),
     "max_spread": (
-        "**Макс. спред, %** — верхняя граница спреда BID/ASK.\n\n"
-        "**Для чайников:** это ваши транзакционные издержки. Чем уже спред — тем дешевле "
-        "купить и продать.\n\n"
-        "**Ориентиры:** ОФЗ <0.1%, корпораты 0.1–0.5%. >1% — низкая ликвидность.\n\n"
-        "**Стратегия:** 0.3% при росте ставок, 0.5% в нейтрали, 0.5–0.8% при падении."
+        "**Макс. спред, %** — верхняя граница. ОФЗ <0.1%, корпораты 0.1–0.5%, >1% — низкая ликвидность."
     ),
     "min_coupon": "**Купон** — выплата в % годовых. «Живые» деньги.",
     "max_coupon": "**Макс. купон** — верхняя граница. Отсекает «мусорные» бумаги.",
-    "coupon_type_filter": (
-        "**Тип купона:**\n"
-        "• **Фикс** — постоянный, предсказуемый.\n"
-        "• **Флоатер** — привязан к ставке.\n"
-        "• **Индексируемый** — привязан к инфляции."
-    ),
-    "face_type_filter": (
-        "**Тип номинала:**\n"
-        "• **Постоянный** — всё в конце.\n"
-        "• **Амортизируемый** — частями.\n"
-        "• **Индексируемый** — по инфляции."
-    ),
+    "coupon_type_filter": "**Тип купона:** Фикс / Флоатер / Индексируемый.",
+    "face_type_filter": "**Тип номинала:** Постоянный / Амортизируемый / Индексируемый.",
     "min_days_maturity": "**Мин. дней до погашения** — слишком короткие (<1 года) → деньги лучше в депозит.",
     "max_days_maturity": "**Макс. дней до погашения** — чем длиннее, тем выше процентный риск.",
     "min_eff_days": "**Мин. эффективный срок** — срок до ближайшей оферты или погашения.",
@@ -292,41 +272,25 @@ HELP = {
     "only_with_offer": "**Только с офертой** — бумаги, где можно вернуть номинал.",
     "min_potential_return": (
         "**Потенциальная доходность** — сколько заработаете за 1 год, "
-        "если прогноз ставки сбудется: изменение цены + годовой купон."
+        "если прогноз ставки сбудется."
     ),
     "only_with_ytm": "**Только с YTM** — бумаги с рассчитанной доходностью к погашению.",
-    "min_ytm": "**Мин. YTM** — нижняя граница доходности. YTM = сколько заработаете в год, если продержите до погашения.",
+    "min_ytm": "**Мин. YTM** — нижняя граница доходности.",
     "max_ytm": "**Макс. YTM** — выше 30% часто означает риск дефолта.",
-    "min_net_ytm": "**Мин. чистый YTM** — доходность после НДФЛ. Сравнивайте с депозитом.",
+    "min_net_ytm": "**Мин. чистый YTM** — доходность после НДФЛ.",
     "max_duration": (
-        "**Дюрация** — на сколько % упадёт цена, если ставка вырастет на 1%.\n\n"
-        "**Для чайников:**\n"
-        "• **≤1** — низкий риск.\n"
-        "• **1–2** — средний.\n"
-        "• **>2** — высокий."
+        "**Дюрация** — на сколько % упадёт цена, если ставка вырастет на 1%."
     ),
     "max_group": (
-        "**Группа надёжности:**\n"
-        "• **1** — ОФЗ, госбанки.\n"
-        "• **2** — крупные надёжные корпораты.\n"
-        "• **3** — средние корпораты.\n"
-        "• **4–5** — рискованные.\n"
-        "• **6** — нет данных."
+        "**Группа надёжности:** 1 — ОФЗ/госбанки … 6 — нет данных."
     ),
-    "min_credit_quality": "**Кредитное качество (X)** — оценка надёжности от 0 до 10. Чем выше — тем меньше риск дефолта.",
+    "min_credit_quality": "**Кредитное качество (X)** — оценка надёжности от 0 до 10.",
     "min_issuer_quality": "**Качество эмитента (X)** — устойчивость бизнес-модели от 1 до 10.",
     "min_inside_q": "**Inside Q (X)** — качество прибыли и баланса.",
     "min_outside_q": "**Outside Q (X)** — ROE, долг, стабильность прибыли.",
-    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка. Чем выше, тем ниже долг.",
-    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги. ≥70 — хорошо.",
-    "max_complexity": (
-        "**Сложность (X):**\n"
-        "• 0 — простая.\n"
-        "• 1 — put-оферта.\n"
-        "• 2 — амортизируемая.\n"
-        "• 3 — плавающий купон.\n"
-        "• 5+ — call-опцион, вечная, структурная."
-    ),
+    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка.",
+    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги.",
+    "max_complexity": "**Сложность (X):** 0 — простая … 7 — структурная.",
     "only_non_subordinated": "**Только без субординации (X)** — суборды при банкротстве возвращаются после всех.",
     "only_with_guarantee": "**Только с гарантией (X)** — бумаги с поручителем или гарантом.",
     "min_volume": "**Мин. объём торгов** — низкий объём = не сможете купить без влияния на цену.",
@@ -336,12 +300,7 @@ HELP = {
     "currency_filter": "**Валюта номинала** — рублёвый портфель: только SUR/RUB.",
     "board_filter": "**Режим торгов** — TQCB (корпоративные), TQOB (ОФЗ), TQOY (юани).",
     "color_filter_on": "**Фильтр по цветам** — оставить строки с определённой подсветкой.",
-    "color_col_filter_on": (
-        "**Фильтр по цвету столбца** — оставить строки, где конкретный столбец подсвечен выбранным цветом.\n\n"
-        "**Пример:** выберите столбец «Спред, %» и цвет «🟢 Зелёные» — увидите только бумаги "
-        "с узким спредом.\n\n"
-        "**Как использовать:** сначала настройте цветовые пороги, затем включите этот фильтр."
-    ),
+    "color_col_filter_on": "**Фильтр по цвету столбца** — оставить строки, где конкретный столбец подсвечен выбранным цветом.",
     "show_green": "**Зелёные** — «хорошо» по показателю.",
     "show_yellow": "**Жёлтые** — «внимание».",
     "show_red": "**Красные** — «риск».",
@@ -350,12 +309,11 @@ HELP = {
     "use_colors": "**Красить ячейки** — включить/выключить подсветку.",
     "preset_select": "**Пресет** — готовый набор фильтров под стратегию.",
     "income_type": (
-        "**Тип доходности** — какую метрику использовать для сортировки и отображения.\n\n"
-        "**Для чайников:**\n"
-        "• **Эффективная (YTM)** — с реинвестированием купонов, к погашению.\n"
+        "**Тип доходности** — метрика для сортировки и отображения:\n\n"
+        "• **Эффективная (YTM)** — с реинвестированием купонов.\n"
         "• **К оферте (YTC)** — если бумага будет выкуплена по оферте.\n"
-        "• **Текущая** — только купон / цена, без учёта изменения цены.\n"
-        "• **Простая** — без реинвестирования, с учётом дисконта к номиналу."
+        "• **Текущая** — только купон / цена.\n"
+        "• **Простая** — без реинвестирования, с учётом дисконта."
     ),
 }
 
@@ -632,10 +590,7 @@ COLUMN_HELP = {
     "Z-спред по средневзвешенной цене": "Z-спред по WAP.",
     "Рыночный риск, %": (
         "На сколько % изменится цена при изменении ставок на ваш прогноз (±п.п.).\n\n"
-        "**Как считается:** −Дюрация × Δставки.\n\n"
-        "Если прогноз = 0 — включается стресс-тест: +2 п.п. для RUB, +1 п.п. для валюты.\n\n"
-        "**Пример:** дюрация 3 года, прогноз +2 п.п. → Рыночный риск = −6% "
-        "(цена упадёт примерно на 6%)."
+        "Формула: −Дюрация × Δставки. Если прогноз = 0 — стресс-тест: +2 п.п. (RUB), +1 п.п. (валюта)."
     ),
     "Кредитное качество": "Оценка эмитента от 0 до 10 (X).",
     "Кредитный рэнкинг": "Буквенная оценка (X).",
@@ -793,22 +748,14 @@ COLUMN_GROUPS = {
     ],
 }
 
-# ================== СТОЛБЦЫ ПО УМОЛЧАНИЮ ==================
-# Соответствуют набору, отмеченному галочками на скриншоте:
+# ================== СТОЛБЦЫ ПО УМОЛЧАНИЮ (со скриншота) ==================
 DEFAULT_VISIBLE_COLS = {
-    # 🆔 Идентификация
     "SECID", "Наименование", "Тип бумаги",
-    # 📊 Рынок
     "Цена последней сделки, %", "Изменение, % к предыдущей", "Спред, %",
-    # 💵 Купон
     "Ставка купона, %", "Период купона, дней", "Купон", "Валюта номинала",
-    # 📅 Сроки
     "Дата погашения", "Дней до погашения", "Событие",
-    # 📈 Доходность и риск
     "Дюрация, лет",
-    # 🏦 Кредитное качество (X)
     "Кредитное качество", "Кредитный рэнкинг", "Качество эмитента",
-    # 💧 Ликвидность
     "Ликвидность (комбинир.)",
 }
 
@@ -1175,9 +1122,8 @@ def enrich(df, settlement_date, ndfl, rate_change_pp):
             df.loc[floater, "Потенциальная доходность, %"] = np.nan
 
     # ========== РЫНОЧНЫЙ РИСК ==========
-    # Если пользователь задал прогноз ставки (≠0) — используем его.
-    # Если прогноз нейтральный (0) — стресс-тест: +2 п.п. для RUB, +1 п.п. для валюты.
-    # Это делает столбец чувствительным к слайдеру «Прогноз ставки ЦБ».
+    # Если прогноз ставки задан (≠0) — используем его.
+    # Если прогноз нейтральный (0) — стресс-тест: +2 п.п. (RUB), +1 п.п. (валюта).
     def _market_risk(row):
         d = row.get("Дюрация, лет")
         if pd.isna(d):
@@ -1352,7 +1298,6 @@ def apply_filters(f, o):
         else:
             f = f[mask_lot]
 
-    # Спред: нижняя и верхняя границы
     if "Спред, %" in f.columns:
         if o.get("min_spread", 0.0) > 0.0:
             mask_spread = ((f["Спред, %"] >= o["min_spread"]) &
@@ -1405,7 +1350,7 @@ def apply_color_filter(res_df, tags_df, selected_colors):
     return res_df[match], tags_df[match]
 
 
-# ================== ВИДЖЕТЫ ==================
+# ================== ВИДЖЕТЫ С КНОПКАМИ «−» / «+» ==================
 def float_slider_with_input(label_display, min_v, max_v, default, step, key,
                             help_text="", is_excel=False, hint=""):
     slider_key = f"{key}_slider"
@@ -1432,6 +1377,16 @@ def float_slider_with_input(label_display, min_v, max_v, default, step, key,
     def _from_num():
         st.session_state[slider_key] = st.session_state[num_key]
 
+    def _dec():
+        v = _clamp(float(st.session_state[num_key]) - float(step))
+        st.session_state[num_key] = v
+        st.session_state[slider_key] = v
+
+    def _inc():
+        v = _clamp(float(st.session_state[num_key]) + float(step))
+        st.session_state[num_key] = v
+        st.session_state[slider_key] = v
+
     if is_excel:
         st.markdown(
             f"<span style='color:#28a745;font-weight:600;'>{label_display}</span>",
@@ -1440,7 +1395,7 @@ def float_slider_with_input(label_display, min_v, max_v, default, step, key,
         st.markdown(f"**{label_display}**")
     if hint:
         st.caption(hint)
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3, col4 = st.columns([3, 1.1, 0.35, 0.35])
     with col1:
         st.slider(" ", float(min_v), float(max_v),
                   step=float(step), key=slider_key,
@@ -1451,6 +1406,12 @@ def float_slider_with_input(label_display, min_v, max_v, default, step, key,
                         step=float(step), key=num_key,
                         on_change=_from_num, format="%.2f",
                         help=help_text, label_visibility="collapsed")
+    with col3:
+        st.button("−", key=f"{key}_btn_minus", on_click=_dec,
+                  use_container_width=True)
+    with col4:
+        st.button("+", key=f"{key}_btn_plus", on_click=_inc,
+                  use_container_width=True)
     return float(st.session_state[slider_key])
 
 
@@ -1480,6 +1441,16 @@ def int_slider_with_input(label_display, min_v, max_v, default, step, key,
     def _from_num():
         st.session_state[slider_key] = int(st.session_state[num_key])
 
+    def _dec():
+        v = _clamp(int(st.session_state[num_key]) - int(step))
+        st.session_state[num_key] = v
+        st.session_state[slider_key] = v
+
+    def _inc():
+        v = _clamp(int(st.session_state[num_key]) + int(step))
+        st.session_state[num_key] = v
+        st.session_state[slider_key] = v
+
     if is_excel:
         st.markdown(
             f"<span style='color:#28a745;font-weight:600;'>{label_display}</span>",
@@ -1488,7 +1459,7 @@ def int_slider_with_input(label_display, min_v, max_v, default, step, key,
         st.markdown(f"**{label_display}**")
     if hint:
         st.caption(hint)
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3, col4 = st.columns([3, 1.1, 0.35, 0.35])
     with col1:
         st.slider(" ", int(min_v), int(max_v),
                   step=int(step), key=slider_key,
@@ -1499,6 +1470,12 @@ def int_slider_with_input(label_display, min_v, max_v, default, step, key,
                         step=int(step), key=num_key,
                         on_change=_from_num, format="%d",
                         help=help_text, label_visibility="collapsed")
+    with col3:
+        st.button("−", key=f"{key}_btn_minus", on_click=_dec,
+                  use_container_width=True)
+    with col4:
+        st.button("+", key=f"{key}_btn_plus", on_click=_inc,
+                  use_container_width=True)
     return int(st.session_state[slider_key])
 
 
@@ -1520,11 +1497,16 @@ def clear_cache_callback():
 
 
 def apply_preset(preset_name):
+    """Пресет обновляет и базовый ключ, и ключи слайдера/number_input."""
     if preset_name not in PRESETS:
         return
     for k, v in PRESETS[preset_name].items():
         st.session_state[k] = v
+        # Обновляем парные ключи виджетов, чтобы слайдер/number_input увидели новое значение
+        st.session_state[f"{k}_slider"] = v
+        st.session_state[f"{k}_num"] = v
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
+
 
 # ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
@@ -1533,66 +1515,255 @@ st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/
 st.caption("Столбцы и фильтры из Excel Доход.ру помечены «(X)». "
            "Клик по SECID открывает карточку на analytics.dohod.ru.")
 
-with st.sidebar:
-    st.header("⚙️ Параметры стратегии")
-
+# ================== ПАРАМЕТРЫ СТРАТЕГИИ ==================
+with st.expander("⚙️ Параметры стратегии", expanded=True):
     preset_name = st.selectbox(
         "🎯 Пресет", ["—"] + list(PRESETS.keys()),
         key="flt_preset", help=HELP["preset_select"])
     if preset_name != "—":
-        if st.button("Применить пресет", use_container_width=True, key="apply_preset_btn"):
+        if st.button("Применить пресет", key="apply_preset_btn"):
             apply_preset(preset_name)
             st.rerun()
 
-    st.markdown("---")
-
-    settlement_date = st.date_input(
-        "Дата расчёта", value=DEFAULT_DATE, key="flt_settlement_date",
-        help=HELP["settlement_date"])
-
-    st.markdown("**Прогноз ставки ЦБ**")
-    st.caption("На сколько п.п. изменится ключевая ставка. "
-               "Влияет на «Прогнозную цену», «Потенциальную доходность» и «Рыночный риск».")
-    rate_change_pp = float_slider_with_input(
-        "Прогноз ставки ЦБ, п.п.", -5.0, 5.0, DEFAULT_RATE_FORECAST, 0.25,
-        key="flt_rate_change", help_text=HELP["rate_change_pp"])
-
-    st.markdown("**Ставка НДФЛ**")
-    st.caption("Налог на купон. Влияет на «Чистый YTM».")
-    ndfl = float_slider_with_input(
-        "Ставка НДФЛ, %", 0.0, 30.0, DEFAULT_NDFL, 0.5,
-        key="flt_ndfl", help_text=HELP["ndfl"])
-
-    st.markdown("**Текущая ставка ЦБ**")
-    st.caption("Базовый ориентир. Всё, что ниже — неинтересно.")
-    cbr_rate = float_slider_with_input(
-        "Введите текущую ставку ЦБ", 0.0, 50.0, 0.0, 0.25,
-        key="flt_cbr_rate", help_text=HELP["cbr_rate"])
-
-    with st.expander("📎 Excel Доход.ру (X)", expanded=False):
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        settlement_date = st.date_input(
+            "Дата расчёта", value=DEFAULT_DATE, key="flt_settlement_date",
+            help=HELP["settlement_date"])
+    with c2:
+        rate_change_pp = float_slider_with_input(
+            "Прогноз ставки ЦБ, п.п.", -5.0, 5.0, DEFAULT_RATE_FORECAST, 0.25,
+            key="flt_rate_change", help_text=HELP["rate_change_pp"])
+    with c3:
+        ndfl = float_slider_with_input(
+            "Ставка НДФЛ, %", 0.0, 30.0, DEFAULT_NDFL, 0.5,
+            key="flt_ndfl", help_text=HELP["ndfl"])
+    with c4:
+        cbr_rate = float_slider_with_input(
+            "Текущая ставка ЦБ, %", 0.0, 50.0, 0.0, 0.25,
+            key="flt_cbr_rate", help_text=HELP["cbr_rate"])
+    with c5:
         uploaded_file = st.file_uploader(
-            "Загрузить Excel", type=["xlsx", "xls"], key="flt_dohod_file",
+            "📎 Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
             help=HELP["uploaded_file"])
         age = get_dohod_cache_age_days()
         if DOHOD_FILE.exists() and uploaded_file is None:
             if age is None:
-                st.caption("📁 Используется кеш Доход.ру.")
+                st.caption("📁 Кеш Доход.ру.")
             elif age > DOHOD_FRESH_DAYS:
-                st.warning(f"⚠️ Кеш устарел: {age} дней.")
+                st.warning(f"⚠️ Кеш: {age} дней.")
             elif age == 0:
-                st.success("✅ Свежий кеш (сегодня).")
+                st.success("✅ Свежий кеш.")
             else:
-                st.info(f"📁 Кеш от {age} дн. назад.")
-        elif uploaded_file is not None:
-            st.caption("📎 Будет использован загруженный файл.")
+                st.info(f"📁 Кеш: {age} дн.")
         if DOHOD_FILE.exists() or DOHOD_META.exists():
-            st.button("🗑️ Удалить кеш Доход.ру", use_container_width=True,
-                      key="clear_cache_btn", on_click=clear_cache_callback)
+            st.button("🗑️ Удалить кеш", key="clear_cache_btn",
+                      on_click=clear_cache_callback, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("🎯 Фильтры под стратегию")
+# ================== ЗАГРУЗКА MOEX ==================
+sec_df, sec_why = load_securities()
+load_log = []
+load_log.append(f"securities: {len(sec_df)}" + (f" ({sec_why})" if sec_why else ""))
 
-    with st.expander("📊 Рынок", expanded=False):
+if sec_df.empty:
+    st.error("securities пустой.")
+    st.stop()
+
+if "BOARDID" in sec_df.columns:
+    before = len(sec_df)
+    sec_df = sec_df[sec_df["BOARDID"].isin(BOND_BOARDS)].copy()
+    load_log.append(f"после фильтра по доскам: {len(sec_df)} (из {before})")
+
+boards_present = (sorted(sec_df["BOARDID"].dropna().unique().tolist())
+                  if "BOARDID" in sec_df.columns else [])
+load_log.append("доски: " + ", ".join(boards_present))
+
+parts = []
+for board in boards_present:
+    m, why = load_marketdata_for_board(board)
+    if not m.empty:
+        parts.append(m)
+        load_log.append(f"  • {board}: {len(m)}" + (f" ({why})" if why else ""))
+    else:
+        load_log.append(f"  • {board}: пусто" + (f" ({why})" if why else ""))
+
+mkt_df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+load_log.append(f"marketdata всего: {len(mkt_df)}")
+
+with st.spinner("Объединение..."):
+    if not mkt_df.empty and {"SECID", "BOARDID"}.issubset(mkt_df.columns):
+        mkt_df = mkt_df.drop_duplicates(subset=["SECID", "BOARDID"])
+        df = sec_df.merge(mkt_df, on=["SECID", "BOARDID"], how="left",
+                          suffixes=("", "_mkt"))
+    else:
+        df = sec_df.copy()
+    df = df.loc[:, ~df.columns.duplicated()]
+
+rename_map = {
+    "SHORTNAME": "Наименование", "SECNAME": "Полное наименование",
+    "MATDATE": "Дата погашения", "OFFERDATE": "Дата оферты",
+    "BUYBACKDATE": "Дата оценки доходности",
+    "COUPONPERCENT": "Ставка купона, %", "COUPONVALUE": "Купон",
+    "FACEVALUE": "Номинал", "FACEUNIT": "Валюта номинала",
+    "ACCRUEDINT": "НКД", "LOTSIZE": "Размер лота",
+    "ISSUESIZE": "Объем выпуска, шт.", "LISTLEVEL": "Уровень листинга",
+    "SECTYPE": "Тип ценной бумаги", "COUPONPERIOD": "Период купона, дней",
+    "COUPON_DETAILS": "Тип купона", "FACEVALUE_TYPE": "Тип номинала",
+    "BOARDID": "Режим торгов",
+    "YIELD": "Доходность по последней сделке",
+    "YIELDATWAPRICE": "Доходность по средневзвешенной цене",
+    "YIELDTOOFFER": "Доходность к оферте", "DURATION": "Дюрация, дней",
+    "CALLOPTIONYIELD": "Доходность к кол-опциону по срвзв.",
+    "CALLOPTIONDURATION": "Дюрация к дате колл-опциона",
+    "ZSPREAD": "Z-спред по цене последней сделки",
+    "ZSPREADATWAPRICE": "Z-спред по средневзвешенной цене",
+    "WAPRICE": "Средневзвешенная цена, % к номиналу",
+    "LAST": "Цена последней сделки, %", "CLOSEPRICE": "Цена закрытия, %",
+    "LCURRENTPRICE": "Текущая цена, %", "VALTODAY": "Объем в валюте",
+    "VOLTODAY": "Объем в бумагах", "NUMTRADES": "Количество сделок",
+    "LASTCHANGEPRCNT": "Изменение, % к предыдущей",
+    "IRICPICLOSE": "Вмененная плавающая ставка",
+    "BEICLOSE": "Вмененная инфляция (BEI)",
+    "CBRCLOSE": "Вмененная ключевая ставка (CBR)",
+    "TRADINGSTATUS": "Состояние сессии", "UPDATETIME": "Время обновления",
+    "SYSTIME": "Время загрузки",
+    "SPREAD": "Спред, %", "BID": "Лучшая цена покупки, %",
+    "OFFER": "Лучшая цена продажи, %",
+    "BIDDEPTH": "Объем на покупку, шт.", "OFFERDEPTH": "Объем на продажу, шт.",
+    "HIGHRISK": "Высокий риск",
+    "HASTECHNICALDEFAULT": "Технический дефолт",
+}
+df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+df = df.loc[:, ~df.columns.duplicated()]
+
+if "SECID" in df.columns and "Режим торгов" in df.columns:
+    df["_prio"] = df["Режим торгов"].map(BOARD_PRIORITY).fillna(99)
+    before_dedup = len(df)
+    df = (df.sort_values("_prio")
+            .drop_duplicates(subset=["SECID"], keep="first")
+            .drop(columns="_prio"))
+    if before_dedup != len(df):
+        load_log.append(f"после дедупликации по SECID: {len(df)} (было {before_dedup})")
+
+if "ISIN" in df.columns:
+    df["ISIN"] = df["ISIN"].astype(str).str.strip()
+    df.loc[df["ISIN"].isin(["", "nan", "None", "NaN", "NAN"]), "ISIN"] = np.nan
+
+for col in ["Дата погашения", "Дата оферты", "Дата оценки доходности"]:
+    if col in df.columns:
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+
+num_cols = [
+    "Ставка купона, %", "Купон", "НКД", "Номинал",
+    "Доходность по последней сделке", "Доходность по средневзвешенной цене",
+    "Доходность к оферте", "Дюрация, дней",
+    "Доходность к кол-опциону по срвзв.", "Дюрация к дате колл-опциона",
+    "Z-спред по цене последней сделки", "Z-спред по средневзвешенной цене",
+    "Средневзвешенная цена, % к номиналу", "Цена последней сделки, %",
+    "Цена закрытия, %", "Текущая цена, %",
+    "Объем в валюте", "Объем в бумагах", "Количество сделок",
+    "Изменение, % к предыдущей", "Уровень листинга", "Период купона, дней",
+    "Размер лота", "Объем выпуска, шт.",
+    "Вмененная плавающая ставка", "Вмененная инфляция (BEI)",
+    "Вмененная ключевая ставка (CBR)",
+    "Спред, %", "Лучшая цена покупки, %", "Лучшая цена продажи, %",
+    "Объем на покупку, шт.", "Объем на продажу, шт.",
+]
+for col in num_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# ================== EXCEL ==================
+dohod_bytes = None
+dohod_origin = None
+dohod_df = pd.DataFrame()
+dohod_err = None
+new_cols = []
+matched = 0
+
+if uploaded_file is not None:
+    try:
+        dohod_bytes = uploaded_file.read()
+        new_hash = _file_hash(dohod_bytes)
+        if st.session_state.get("dohod_hash") != new_hash:
+            save_dohod_bytes(dohod_bytes, source="manual_upload")
+            st.session_state["dohod_hash"] = new_hash
+        dohod_origin = "manual"
+    except Exception as e:
+        dohod_err = f"Не удалось прочитать файл: {e}"
+
+if dohod_bytes is None:
+    cached = load_cached_dohod_bytes()
+    if cached:
+        dohod_bytes = cached
+        dohod_origin = "cache"
+
+if dohod_bytes:
+    with st.spinner(f"Парсинг Excel ({dohod_origin})..."):
+        dohod_df, dohod_err = parse_dohod_cached(dohod_bytes)
+    if dohod_err:
+        st.error(f"❌ {dohod_err}")
+    elif dohod_df.empty:
+        st.warning("Файл пустой.")
+    else:
+        if "ISIN" not in df.columns:
+            df["ISIN"] = np.nan
+        df["ISIN"] = df["ISIN"].astype(str).str.strip()
+        df.loc[df["ISIN"].isin(["", "nan", "None", "NaN", "NAN"]), "ISIN"] = np.nan
+        before_cols = set(df.columns)
+        df = df.merge(dohod_df, on="ISIN", how="left", suffixes=("", "_др"))
+        df = df.loc[:, ~df.columns.duplicated()]
+        new_cols = sorted(set(df.columns) - before_cols)
+        matched = df["Кредитное качество"].notna().sum() if "Кредитное качество" in df.columns else 0
+        if "Отрасль" in df.columns:
+            mask_no_industry = df["Отрасль"].isna() | (df["Отрасль"].astype(str).str.strip() == "")
+            if mask_no_industry.any():
+                df.loc[mask_no_industry, "Отрасль"] = determine_industry_vectorized(df[mask_no_industry])
+
+# ================== ENRICH ==================
+with st.spinner("Расчёт метрик..."):
+    df = enrich(df, settlement_date, ndfl, rate_change_pp)
+
+# ================== ДИНАМИЧЕСКИЕ ФИЛЬТРЫ ==================
+currency_options = (sorted(df["Валюта номинала"].dropna().unique().tolist())
+                    if "Валюта номинала" in df.columns else [])
+board_codes_present = (sorted(df["Режим торгов"].dropna().unique().tolist())
+                       if "Режим торгов" in df.columns else [])
+board_label_map = {board_label(c): c for c in board_codes_present}
+board_options_labels = list(board_label_map.keys())
+coupon_type_options = (sorted(df["Тип купона"].dropna().astype(str).unique().tolist())
+                       if "Тип купона" in df.columns else [])
+face_type_options = (sorted(df["Тип номинала"].dropna().astype(str).unique().tolist())
+                     if "Тип номинала" in df.columns else [])
+list_levels_options = (sorted(df["Уровень листинга"].dropna().astype(int).unique().tolist())
+                       if "Уровень листинга" in df.columns else [])
+issuer_types_options = (sorted(df["Тип эмитента (Доход.ру)"].dropna().astype(str).unique().tolist())
+                        if "Тип эмитента (Доход.ру)" in df.columns else [])
+industry_options = (sorted(df["Отрасль"].dropna().astype(str).unique().tolist())
+                    if "Отрасль" in df.columns else [])
+bond_type_options = (sorted(df["Тип бумаги"].dropna().astype(str).unique().tolist())
+                     if "Тип бумаги" in df.columns else [])
+
+
+def checkbox_group(options, key_prefix, default_selected, n_cols=2):
+    selected = []
+    cols = st.columns(n_cols)
+    for i, opt in enumerate(options):
+        key = f"{key_prefix}_{opt}"
+        checked = cols[i % n_cols].checkbox(
+            str(opt), value=(opt in default_selected), key=key)
+        if checked:
+            selected.append(opt)
+    return selected
+
+
+# ================== ФИЛЬТРЫ НАД ТАБЛИЦЕЙ ==================
+with st.expander("🎯 Фильтры под стратегию", expanded=True):
+    col_left, col_mid, col_right = st.columns(3)
+
+    # --- Левая колонка ---
+    with col_left:
+        st.markdown("##### 📊 Рынок")
         only_with_price = st.checkbox(
             "Только с ценой", value=True, key="flt_only_with_price",
             help=HELP["only_with_price"])
@@ -1601,14 +1772,12 @@ with st.sidebar:
             help=HELP["only_discount"])
         min_spread = float_slider_with_input(
             "Мин. спред, %", 0.0, 5.0, 0.0, 0.05,
-            key="flt_min_spread", help_text=HELP["min_spread"],
-            hint="Нижняя граница. 0 = без ограничения.")
+            key="flt_min_spread", help_text=HELP["min_spread"])
         max_spread = float_slider_with_input(
             "Макс. спред, %", 0.0, 5.0, DEFAULT_MAX_SPREAD, 0.05,
-            key="flt_max_spread", help_text=HELP["max_spread"],
-            hint="Уже = дешевле торговать. 5.0 = фильтр отключён.")
+            key="flt_max_spread", help_text=HELP["max_spread"])
 
-    with st.expander("💵 Купон", expanded=False):
+        st.markdown("##### 💵 Купон")
         min_coupon = float_slider_with_input(
             "Мин. ставка купона, %", 0.0, 50.0, 0.0, 0.5,
             key="flt_min_coupon", help_text=HELP["min_coupon"])
@@ -1619,7 +1788,7 @@ with st.sidebar:
             "Макс. сумма покупки лота", 0, 10_000_000, 0, 1000,
             key="flt_max_lot_cost", help_text=HELP["max_lot_cost"])
 
-    with st.expander("📅 Сроки", expanded=False):
+        st.markdown("##### 📅 Сроки")
         min_days_maturity = int_slider_with_input(
             "Мин. дней до погашения", 0, 7300, DEFAULT_MIN_DAYS, 30,
             key="flt_min_days_maturity", help_text=HELP["min_days_maturity"])
@@ -1639,7 +1808,9 @@ with st.sidebar:
             "Только с офертой", value=False, key="flt_only_with_offer",
             help=HELP["only_with_offer"])
 
-    with st.expander("📈 Доходность и риск", expanded=False):
+    # --- Средняя колонка ---
+    with col_mid:
+        st.markdown("##### 📈 Доходность и риск")
         min_potential_return = float_slider_with_input(
             "Мин. потенциальная доходность, %", -100.0, 100.0,
             DEFAULT_MIN_POTENTIAL_RETURN, 0.5,
@@ -1663,8 +1834,7 @@ with st.sidebar:
             "Мин. чистый YTM, %", -50.0, 100.0, -50.0, 0.5,
             key="flt_min_net_ytm", help_text=HELP["min_net_ytm"])
 
-    with st.expander("🏦 Кредитное качество (X)", expanded=False):
-        st.caption("Работает только если загружен Excel Доход.ру.")
+        st.markdown("##### 🏦 Кредитное качество (X)")
         min_credit_quality = float_slider_with_input(
             "Мин. кредитное качество (X, из 10)", 0.0, 10.0,
             DEFAULT_MIN_CREDIT_QUALITY, 0.5,
@@ -1702,7 +1872,9 @@ with st.sidebar:
             "Только с гарантией (X)", value=False,
             key="flt_only_with_guarantee", help=HELP["only_with_guarantee"])
 
-    with st.expander("💧 Ликвидность", expanded=False):
+    # --- Правая колонка ---
+    with col_right:
+        st.markdown("##### 💧 Ликвидность")
         min_volume = int_slider_with_input(
             "Мин. объём торгов", 0, 500_000_000, DEFAULT_MIN_VOLUME, 100_000,
             key="flt_min_volume", help_text=HELP["min_volume"])
@@ -1710,12 +1882,67 @@ with st.sidebar:
             "Мин. сделок за день", 0, 5000, DEFAULT_MIN_TRADES, 10,
             key="flt_min_trades", help_text=HELP["min_trades"])
 
-    with st.expander("🌍 Макро", expanded=False):
+        st.markdown("##### 🌍 Валюта и режимы")
+        currency_filter = st.multiselect(
+            "Валюта номинала", currency_options,
+            default=[c for c in currency_options if c in ("SUR", "RUB")],
+            key="flt_currency_filter", help=HELP["currency_filter"])
+        selected_board_labels = st.multiselect(
+            "Режим торгов", board_options_labels,
+            default=[l for l in board_options_labels
+                     if board_label_map[l] in ("TQCB", "TQOB")],
+            key="flt_board_filter", help=HELP["board_filter"])
+        board_filter = [board_label_map[l] for l in selected_board_labels]
+
+        if industry_options:
+            st.markdown("##### 🆔 Отрасль (X)")
+            st.caption(HELP["industries"])
+            industries = checkbox_group(industry_options, "flt_industry", [], n_cols=2)
+        else:
+            industries = []
+
+        if issuer_types_options:
+            st.markdown("##### 🆔 Тип эмитента (X)")
+            st.caption(HELP["issuer_types"])
+            issuer_types = checkbox_group(issuer_types_options, "flt_issuer_type", [], n_cols=1)
+        else:
+            issuer_types = []
+
+        if list_levels_options:
+            st.markdown("##### 🆔 Уровень листинга")
+            st.caption(HELP["list_levels"])
+            list_levels = checkbox_group(list_levels_options, "flt_list_levels",
+                                         list_levels_options, n_cols=3)
+        else:
+            list_levels = []
+
+        if coupon_type_options:
+            st.markdown("##### 💵 Тип купона")
+            st.caption(HELP["coupon_type_filter"])
+            coupon_type_filter = checkbox_group(coupon_type_options, "flt_coupon_type", [], n_cols=2)
+        else:
+            coupon_type_filter = []
+
+        if face_type_options:
+            st.markdown("##### 💵 Тип номинала")
+            st.caption(HELP["face_type_filter"])
+            face_type_filter = checkbox_group(face_type_options, "flt_face_type", [], n_cols=2)
+        else:
+            face_type_filter = []
+
+        if bond_type_options:
+            st.markdown("##### 🆔 Тип бумаги")
+            st.caption("Фильтр по метке: Флоатер, Фикс, Амортизируемая, Суборд и т.д.")
+            bond_type_filter = checkbox_group(bond_type_options, "flt_bond_type", [], n_cols=1)
+        else:
+            bond_type_filter = []
+
+        st.markdown("##### 🌍 Макро")
         keep_na = st.checkbox(
             "Показывать бумаги без данных", value=False, key="flt_keep_na",
             help=HELP["keep_na"])
 
-    with st.expander("🎨 Фильтр по цветам (общий)", expanded=False):
+        st.markdown("##### 🎨 Фильтр по цветам (общий)")
         color_filter_on = st.checkbox(
             "Применить фильтр по цвету", value=False, key="flt_color_on",
             help=HELP["color_filter_on"])
@@ -1729,13 +1956,13 @@ with st.sidebar:
                                      key="flt_color_uncolored",
                                      help=HELP["show_uncolored"])
 
-    with st.expander("🎨 Фильтр по цвету столбца", expanded=False):
+        st.markdown("##### 🎨 Фильтр по цвету столбца")
         color_col_filter_on = st.checkbox(
             "Применить фильтр", value=False,
             key="flt_color_col_on", help=HELP["color_col_filter_on"])
         color_col_name = st.selectbox(
             "Столбец",
-            [c for c in [
+            [
                 "Спред, %",
                 "Потенциальная доходность, %",
                 "YTM, %", "Чистый YTM, %", "YTC, %",
@@ -1746,7 +1973,7 @@ with st.sidebar:
                 "Объем в валюте", "Количество сделок",
                 "Рыночный риск, %",
                 "Тип бумаги",
-            ]],
+            ],
             key="flt_color_col_name",
         )
         color_col_colors = st.multiselect(
@@ -1763,351 +1990,11 @@ with st.sidebar:
         )
 
     st.markdown("---")
-    st.subheader("🎯 Точная настройка")
-    st.caption("Появится после загрузки данных ↓")
-
-sidebar_dynamic_placeholder = st.sidebar.container()
-
-# ========== ИНФО-БЛОКИ ==========
-with st.expander("📖 Методология Доход.ру (новая модель расчёта)", expanded=False):
-    st.markdown("""
-    Доход.ру считает доходности по собственной модели, отличной от MOEX.
-
-    ### 1. YTM — всегда эффективная
-    Все доходности считаются из денежных потоков.
-
-    ### 2. Флоатеры — моделирование по форвардной кривой
-    Будущие купоны моделируются по кривой форвардных ставок.
-
-    ### 3. Дюрация флоатеров — до следующего пересчёта
-    После пересчёта ставка сбрасывается к рыночной.
-
-    ### 4. Только «настоящие» оферты
-    Частичные или от третьих лиц игнорируются.
-
-    ### 5. Расчёт к следующей эффективной дате
-    ФСК РС Б4: 146.7% к прошедшей оферте, реальная 13.9% к следующей.
-
-    ### 6. Качество эмитента
-    Доход.ру использует Quality (1–10) для отбора в фонд GOOD ETF.
-    Качество ≥5 — высокое, <5 — низкое.
-
-    ### 7. Сложность облигаций (0–7)
-    0 — фикс; 1 — put; 2 — амортизация; 3 — флоатер;
-    4 — индексируемый; 5 — call; 6 — вечная; 7 — структурная.
-    """)
-
-with st.expander("🎨 Легенда цветов", expanded=False):
-    st.markdown("""
-    **(X)** — столбец или фильтр из Excel Доход.ру.
-
-    | Столбец | 🟢 | 🟡 | 🔴 |
-    |---|---|---|---|
-    | Потенциальная доходность | ≥ ЦБ | — | < 0 |
-    | YTM, Чистый YTM, YTC, Текущая, Простая | ≥ ЦБ | — | < 0 |
-    | Ставка купона | ≥ ЦБ | — | < 5% |
-    | Дюрация, лет | ≤ 1 | 1…макс | > макс |
-    | Дисконт к номиналу | ≥ 5% | — | < 0 |
-    | Спред | < 0.2 | 0.5–1.0 | > 1.0 |
-    | Кредитное качество (X) | ≥ 8 | 5–8 | < 5 |
-    | Качество эмитента (X) | ≥ 8 | — | < 5 |
-    | Inside/Outside Q (X) | ≥ 7 | — | < 4 |
-    | NetDebt/Equity (X) | ≥ 7 | — | < 4 |
-    | Коэф. ликвидности (X) | ≥ 70 | — | < 50 |
-    | Сложность (X) | ≤ 1 | — | ≥ 3 |
-    | Субординированная (X) = Да | — | — | 🔴 |
-    | С гарантией (X) = Да | 🟢 | — | — |
-    | Группа надёжности | 1–3 | — | 5–6 |
-    | Z-спред, б.п. | ≥ 300 | — | < 50 |
-    | Уровень листинга | 1 | — | 3 |
-    | Рыночный риск | ≥ −2% | — | < −5% |
-    | Тип бумаги | — | Флоатер | Суборд |
-    """)
-
-# ========== ЗАГРУЗКА ==========
-with st.expander("⏳ Загрузка данных (разверните, чтобы увидеть подробности)",
-                 expanded=False):
-    sec_df, sec_why = load_securities()
-    st.write(f"→ securities: **{len(sec_df)}** строк" +
-             (f" ({sec_why})" if sec_why else ""))
-
-    if sec_df.empty:
-        st.error("securities пустой.")
-        st.stop()
-
-    if "BOARDID" in sec_df.columns:
-        before = len(sec_df)
-        sec_df = sec_df[sec_df["BOARDID"].isin(BOND_BOARDS)].copy()
-        st.write(f"→ после фильтра по доскам: **{len(sec_df)}** (из {before})")
-
-    boards_present = (sorted(sec_df["BOARDID"].dropna().unique().tolist())
-                      if "BOARDID" in sec_df.columns else [])
-    st.write("→ доски:", boards_present)
-
-    parts = []
-    for board in boards_present:
-        m, why = load_marketdata_for_board(board)
-        if not m.empty:
-            parts.append(m)
-            note = f" ({why})" if why else ""
-            st.write(f"   • {board}: {len(m)} строк{note}")
-        else:
-            note = f" ({why})" if why else ""
-            st.write(f"   • {board}: пусто{note}")
-
-    mkt_df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-    st.write(f"→ marketdata всего: **{len(mkt_df)}** строк")
-
-    with st.spinner("Объединение..."):
-        if not mkt_df.empty and {"SECID", "BOARDID"}.issubset(mkt_df.columns):
-            mkt_df = mkt_df.drop_duplicates(subset=["SECID", "BOARDID"])
-            df = sec_df.merge(mkt_df, on=["SECID", "BOARDID"], how="left",
-                              suffixes=("", "_mkt"))
-        else:
-            df = sec_df.copy()
-        df = df.loc[:, ~df.columns.duplicated()]
-
-    rename_map = {
-        "SHORTNAME": "Наименование", "SECNAME": "Полное наименование",
-        "MATDATE": "Дата погашения", "OFFERDATE": "Дата оферты",
-        "BUYBACKDATE": "Дата оценки доходности",
-        "COUPONPERCENT": "Ставка купона, %", "COUPONVALUE": "Купон",
-        "FACEVALUE": "Номинал", "FACEUNIT": "Валюта номинала",
-        "ACCRUEDINT": "НКД", "LOTSIZE": "Размер лота",
-        "ISSUESIZE": "Объем выпуска, шт.", "LISTLEVEL": "Уровень листинга",
-        "SECTYPE": "Тип ценной бумаги", "COUPONPERIOD": "Период купона, дней",
-        "COUPON_DETAILS": "Тип купона", "FACEVALUE_TYPE": "Тип номинала",
-        "BOARDID": "Режим торгов",
-        "YIELD": "Доходность по последней сделке",
-        "YIELDATWAPRICE": "Доходность по средневзвешенной цене",
-        "YIELDTOOFFER": "Доходность к оферте", "DURATION": "Дюрация, дней",
-        "CALLOPTIONYIELD": "Доходность к кол-опциону по срвзв.",
-        "CALLOPTIONDURATION": "Дюрация к дате колл-опциона",
-        "ZSPREAD": "Z-спред по цене последней сделки",
-        "ZSPREADATWAPRICE": "Z-спред по средневзвешенной цене",
-        "WAPRICE": "Средневзвешенная цена, % к номиналу",
-        "LAST": "Цена последней сделки, %", "CLOSEPRICE": "Цена закрытия, %",
-        "LCURRENTPRICE": "Текущая цена, %", "VALTODAY": "Объем в валюте",
-        "VOLTODAY": "Объем в бумагах", "NUMTRADES": "Количество сделок",
-        "LASTCHANGEPRCNT": "Изменение, % к предыдущей",
-        "IRICPICLOSE": "Вмененная плавающая ставка",
-        "BEICLOSE": "Вмененная инфляция (BEI)",
-        "CBRCLOSE": "Вмененная ключевая ставка (CBR)",
-        "TRADINGSTATUS": "Состояние сессии", "UPDATETIME": "Время обновления",
-        "SYSTIME": "Время загрузки",
-        "SPREAD": "Спред, %", "BID": "Лучшая цена покупки, %",
-        "OFFER": "Лучшая цена продажи, %",
-        "BIDDEPTH": "Объем на покупку, шт.", "OFFERDEPTH": "Объем на продажу, шт.",
-        "HIGHRISK": "Высокий риск",
-        "HASTECHNICALDEFAULT": "Технический дефолт",
-    }
-    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
-    df = df.loc[:, ~df.columns.duplicated()]
-
-    if "SECID" in df.columns and "Режим торгов" in df.columns:
-        df["_prio"] = df["Режим торгов"].map(BOARD_PRIORITY).fillna(99)
-        before_dedup = len(df)
-        df = (df.sort_values("_prio")
-                .drop_duplicates(subset=["SECID"], keep="first")
-                .drop(columns="_prio"))
-        if before_dedup != len(df):
-            st.write(f"→ после дедупликации по SECID: **{len(df)}** "
-                     f"(было {before_dedup})")
-
-    if "ISIN" in df.columns:
-        df["ISIN"] = df["ISIN"].astype(str).str.strip()
-        df.loc[df["ISIN"].isin(["", "nan", "None", "NaN", "NAN"]), "ISIN"] = np.nan
-
-    for col in ["Дата погашения", "Дата оферты", "Дата оценки доходности"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-
-    num_cols = [
-        "Ставка купона, %", "Купон", "НКД", "Номинал",
-        "Доходность по последней сделке", "Доходность по средневзвешенной цене",
-        "Доходность к оферте", "Дюрация, дней",
-        "Доходность к кол-опциону по срвзв.", "Дюрация к дате колл-опциона",
-        "Z-спред по цене последней сделки", "Z-спред по средневзвешенной цене",
-        "Средневзвешенная цена, % к номиналу", "Цена последней сделки, %",
-        "Цена закрытия, %", "Текущая цена, %",
-        "Объем в валюте", "Объем в бумагах", "Количество сделок",
-        "Изменение, % к предыдущей", "Уровень листинга", "Период купона, дней",
-        "Размер лота", "Объем выпуска, шт.",
-        "Вмененная плавающая ставка", "Вмененная инфляция (BEI)",
-        "Вмененная ключевая ставка (CBR)",
-        "Спред, %", "Лучшая цена покупки, %", "Лучшая цена продажи, %",
-        "Объем на покупку, шт.", "Объем на продажу, шт.",
-    ]
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    st.success(f"✅ Загружено {len(df):,} строк с MOEX")
-
-# ========== EXCEL ==========
-dohod_bytes = None
-dohod_origin = None
-if uploaded_file is not None:
-    try:
-        dohod_bytes = uploaded_file.read()
-        new_hash = _file_hash(dohod_bytes)
-        if st.session_state.get("dohod_hash") != new_hash:
-            save_dohod_bytes(dohod_bytes, source="manual_upload")
-            st.session_state["dohod_hash"] = new_hash
-        dohod_origin = "manual"
-    except Exception as e:
-        st.error(f"Не удалось прочитать файл: {e}")
-
-if dohod_bytes is None:
-    cached = load_cached_dohod_bytes()
-    if cached:
-        dohod_bytes = cached
-        dohod_origin = "cache"
-
-if dohod_bytes:
-    with st.spinner(f"Парсинг Excel ({dohod_origin})..."):
-        dohod_df, dohod_err = parse_dohod_cached(dohod_bytes)
-    if dohod_err:
-        st.error(f"❌ {dohod_err}")
-    elif dohod_df.empty:
-        st.warning("Файл пустой.")
-    else:
-        if "ISIN" not in df.columns:
-            df["ISIN"] = np.nan
-        df["ISIN"] = df["ISIN"].astype(str).str.strip()
-        df.loc[df["ISIN"].isin(["", "nan", "None", "NaN", "NAN"]), "ISIN"] = np.nan
-        before_cols = set(df.columns)
-        df = df.merge(dohod_df, on="ISIN", how="left", suffixes=("", "_др"))
-        df = df.loc[:, ~df.columns.duplicated()]
-        new_cols = sorted(set(df.columns) - before_cols)
-        matched = df["Кредитное качество"].notna().sum() if "Кредитное качество" in df.columns else 0
-        origin_label = {"manual": "загруженный файл",
-                        "cache": "локальный кеш"}.get(dohod_origin, dohod_origin)
-        if dohod_origin == "manual":
-            st.success(f"✅ Доход.ру ({origin_label}): {len(dohod_df)} строк, "
-                       f"сопоставлено: {matched} из {len(df)}")
-        else:
-            st.info(f"ℹ️ Доход.ру из кеша: {len(dohod_df)} строк, "
-                    f"сопоставлено: {matched} из {len(df)}")
-        if new_cols:
-            st.caption("Новые столбцы (X): " + ", ".join(mark_x(c) for c in new_cols))
-        if "Отрасль" in df.columns:
-            mask_no_industry = df["Отрасль"].isna() | (df["Отрасль"].astype(str).str.strip() == "")
-            if mask_no_industry.any():
-                df.loc[mask_no_industry, "Отрасль"] = determine_industry_vectorized(df[mask_no_industry])
-else:
-    st.info("ℹ️ Excel Доход.ру не загружен.")
-
-with st.spinner("Расчёт метрик..."):
-    df = enrich(df, settlement_date, ndfl, rate_change_pp)
-
-# ========== ДИНАМИЧЕСКИЕ ФИЛЬТРЫ ==========
-currency_options = (sorted(df["Валюта номинала"].dropna().unique().tolist())
-                    if "Валюта номинала" in df.columns else [])
-board_codes_present = (sorted(df["Режим торгов"].dropna().unique().tolist())
-                       if "Режим торгов" in df.columns else [])
-board_label_map = {board_label(c): c for c in board_codes_present}
-board_options_labels = list(board_label_map.keys())
-coupon_type_options = (sorted(df["Тип купона"].dropna().astype(str).unique().tolist())
-                       if "Тип купона" in df.columns else [])
-face_type_options = (sorted(df["Тип номинала"].dropna().astype(str).unique().tolist())
-                     if "Тип номинала" in df.columns else [])
-list_levels_options = (sorted(df["Уровень листинга"].dropna().astype(int).unique().tolist())
-                       if "Уровень листинга" in df.columns else [])
-issuer_types_options = (sorted(df["Тип эмитента (Доход.ру)"].dropna().astype(str).unique().tolist())
-                        if "Тип эмитента (Доход.ру)" in df.columns else [])
-industry_options = (sorted(df["Отрасль"].dropna().astype(str).unique().tolist())
-                    if "Отрасль" in df.columns else [])
-bond_type_options = (sorted(df["Тип бумаги"].dropna().astype(str).unique().tolist())
-                     if "Тип бумаги" in df.columns else [])
-
-
-def checkbox_group(options, key_prefix, default_selected, n_cols=2):
-    selected = []
-    cols = st.columns(n_cols)
-    for i, opt in enumerate(options):
-        key = f"{key_prefix}_{opt}"
-        checked = cols[i % n_cols].checkbox(
-            str(opt), value=(opt in default_selected), key=key)
-        if checked:
-            selected.append(opt)
-    return selected
-
-
-with sidebar_dynamic_placeholder:
-    with st.expander("🌍 Валюта и режимы", expanded=False):
-        currency_filter = st.multiselect(
-            "Валюта номинала", currency_options,
-            default=[c for c in currency_options if c in ("SUR", "RUB")],
-            key="flt_currency_filter", help=HELP["currency_filter"])
-        selected_board_labels = st.multiselect(
-            "Режим торгов", board_options_labels,
-            default=[l for l in board_options_labels
-                     if board_label_map[l] in ("TQCB", "TQOB")],
-            key="flt_board_filter", help=HELP["board_filter"])
-        board_filter = [board_label_map[l] for l in selected_board_labels]
-
-    if industry_options:
-        with st.expander("🆔 Отрасль (X)", expanded=False):
-            st.markdown("<span style='color:#28a745;font-weight:600;'>"
-                        "Отрасль (X)</span>", unsafe_allow_html=True)
-            st.caption(HELP["industries"])
-            industries = checkbox_group(industry_options, "flt_industry", [], n_cols=2)
-    else:
-        industries = []
-
-    if issuer_types_options:
-        with st.expander("🆔 Тип эмитента (X)", expanded=False):
-            st.markdown("<span style='color:#28a745;font-weight:600;'>"
-                        "Тип эмитента (X)</span>", unsafe_allow_html=True)
-            st.caption(HELP["issuer_types"])
-            issuer_types = checkbox_group(issuer_types_options, "flt_issuer_type", [], n_cols=1)
-    else:
-        issuer_types = []
-
-    with st.expander("🆔 Уровень листинга", expanded=False):
-        st.caption(HELP["list_levels"])
-        list_levels = checkbox_group(list_levels_options, "flt_list_levels",
-                                     list_levels_options, n_cols=3)
-
-    if coupon_type_options:
-        with st.expander("💵 Тип купона", expanded=False):
-            st.caption(HELP["coupon_type_filter"])
-            coupon_type_filter = checkbox_group(coupon_type_options, "flt_coupon_type", [], n_cols=2)
-    else:
-        coupon_type_filter = []
-
-    if face_type_options:
-        with st.expander("💵 Тип номинала", expanded=False):
-            st.caption(HELP["face_type_filter"])
-            face_type_filter = checkbox_group(face_type_options, "flt_face_type", [], n_cols=2)
-    else:
-        face_type_filter = []
-
-    if bond_type_options:
-        with st.expander("🆔 Тип бумаги", expanded=False):
-            st.caption("Фильтр по метке: Флоатер, Фикс, Амортизируемая, Суборд и т.д.")
-            bond_type_filter = checkbox_group(bond_type_options, "flt_bond_type", [], n_cols=1)
-    else:
-        bond_type_filter = []
-
-    st.markdown("---")
     st.button("🔄 Сбросить к параметрам стратегии",
-              use_container_width=True, key="reset_btn",
+              key="reset_btn",
               on_click=reset_button_callback, help=HELP["reset_btn"])
 
-# ========== РЕЖИМЫ ТОРГОВ ==========
-with st.expander("ℹ️ Режимы торгов", expanded=False):
-    rows = []
-    for code in board_codes_present:
-        info = BOARD_INFO.get(code, {})
-        rows.append({"Код": code, "Тип": info.get("label", "—"),
-                     "Валюта": info.get("currency", "—"),
-                     "Расчёты": info.get("settle", "—"),
-                     "Кому": info.get("for", "—")})
-    if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
+# ================== ПРИМЕНЕНИЕ ФИЛЬТРОВ ==================
 opts = {
     "min_potential_return": min_potential_return,
     "min_credit_quality": min_credit_quality,
@@ -2145,20 +2032,155 @@ opts = {
 }
 
 filtered = apply_filters(df, opts)
+
+# ================== ЕДИНЫЙ СЛУЖЕБНЫЙ СПОЙЛЕР ==================
+with st.expander("ℹ️ Справочная информация и служебные блоки", expanded=False):
+    st.markdown("### 📖 Методология Доход.ру")
+    st.markdown("""
+    Доход.ру считает доходности по собственной модели, отличной от MOEX.
+
+    - **YTM** — всегда эффективная, из денежных потоков.
+    - **Флоатеры** — моделирование по форвардной кривой.
+    - **Дюрация флоатеров** — до следующего пересчёта.
+    - **Оферты** — только «настоящие», частичные игнорируются.
+    - **Расчёт к следующей эффективной дате.**
+    - **Качество эмитента** (1–10): ≥5 — высокое, <5 — низкое.
+    - **Сложность:** 0 — фикс; 1 — put; 2 — амортизация; 3 — флоатер;
+      4 — индексируемый; 5 — call; 6 — вечная; 7 — структурная.
+    """)
+
+    st.markdown("### 🎨 Легенда цветов")
+    st.markdown("""
+    **(X)** — столбец или фильтр из Excel Доход.ру.
+
+    | Столбец | 🟢 | 🟡 | 🔴 |
+    |---|---|---|---|
+    | Потенциальная доходность | ≥ ЦБ | — | < 0 |
+    | YTM, Чистый YTM, YTC, Текущая, Простая | ≥ ЦБ | — | < 0 |
+    | Ставка купона | ≥ ЦБ | — | < 5% |
+    | Дюрация, лет | ≤ 1 | 1…макс | > макс |
+    | Дисконт к номиналу | ≥ 5% | — | < 0 |
+    | Спред | < 0.2 | 0.5–1.0 | > 1.0 |
+    | Кредитное качество (X) | ≥ 8 | 5–8 | < 5 |
+    | Качество эмитента (X) | ≥ 8 | — | < 5 |
+    | Inside/Outside Q (X) | ≥ 7 | — | < 4 |
+    | NetDebt/Equity (X) | ≥ 7 | — | < 4 |
+    | Коэф. ликвидности (X) | ≥ 70 | — | < 50 |
+    | Сложность (X) | ≤ 1 | — | ≥ 3 |
+    | Субординированная (X) = Да | — | — | 🔴 |
+    | С гарантией (X) = Да | 🟢 | — | — |
+    | Группа надёжности | 1–3 | — | 5–6 |
+    | Z-спред, б.п. | ≥ 300 | — | < 50 |
+    | Уровень листинга | 1 | — | 3 |
+    | Рыночный риск | ≥ −2% | — | < −5% |
+    | Тип бумаги | — | Флоатер | Суборд |
+    """)
+
+    st.markdown("### ⏳ Детали загрузки данных")
+    for line in load_log:
+        st.write("→ " + line)
+
+    if dohod_bytes and not dohod_err and not dohod_df.empty:
+        origin_label = {"manual": "загруженный файл",
+                        "cache": "локальный кеш"}.get(dohod_origin, dohod_origin)
+        st.success(f"✅ Доход.ру ({origin_label}): {len(dohod_df)} строк, "
+                   f"сопоставлено: {matched} из {len(df)}")
+        if new_cols:
+            st.caption("Новые столбцы (X): " + ", ".join(mark_x(c) for c in new_cols))
+    elif not dohod_bytes:
+        st.info("ℹ️ Excel Доход.ру не загружен.")
+
+    st.markdown("### ℹ️ Режимы торгов")
+    rows = []
+    for code in board_codes_present:
+        info = BOARD_INFO.get(code, {})
+        rows.append({"Код": code, "Тип": info.get("label", "—"),
+                     "Валюта": info.get("currency", "—"),
+                     "Расчёты": info.get("settle", "—"),
+                     "Кому": info.get("for", "—")})
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    st.markdown("### 📈 Тип доходности для сортировки и отображения")
+    # INCOME_TYPE_MAP: 0=YTM, 1=YTC, 2=Текущая, 3=Простая.
+    # По умолчанию — «Простая (без реинвест.)».
+    income_type = st.radio(
+        "Какую доходность показывать и по ней сортировать:",
+        list(INCOME_TYPE_MAP.keys()),
+        index=3, horizontal=True, key="view_income_type",
+        help=HELP["income_type"])
+    income_col = INCOME_TYPE_MAP[income_type]
+
+# ================== «НАЙДЕНО» НАД ТАБЛИЦЕЙ ==================
 st.subheader(f"📊 Найдено: {len(filtered)} из {len(df)}")
 
-# ========== ВЫБОР ТИПА ДОХОДНОСТИ ==========
-# По умолчанию — «Простая (без реинвест.)» (index=3).
-# INCOME_TYPE_MAP: 0=YTM, 1=YTC, 2=Текущая, 3=Простая.
-st.markdown("### 📈 Тип доходности для сортировки и отображения")
-income_type = st.radio(
-    "Какую доходность показывать и по ней сортировать:",
-    list(INCOME_TYPE_MAP.keys()),
-    index=3, horizontal=True, key="view_income_type",
-    help=HELP["income_type"])
-income_col = INCOME_TYPE_MAP[income_type]
+# ================== СОРТИРОВКА ==================
+st.markdown("### 🔀 Сортировка")
 
-# ========== ВЫБОР СТОЛБЦОВ ==========
+numeric_or_date_cols = [
+    c for c in filtered.columns
+    if pd.api.types.is_numeric_dtype(filtered[c])
+    or pd.api.types.is_datetime64_any_dtype(filtered[c])
+]
+if not numeric_or_date_cols:
+    numeric_or_date_cols = list(filtered.columns)
+
+# Отображаемые названия — те же, что в заголовках таблицы
+sort_display_map = {display_name_short(c): c for c in numeric_or_date_cols}
+sort_display_list = list(sort_display_map.keys())
+
+_default_sort_key = income_col if income_col in numeric_or_date_cols else numeric_or_date_cols[0]
+_default_sort_display = display_name_short(_default_sort_key)
+_default_idx = (sort_display_list.index(_default_sort_display)
+                if _default_sort_display in sort_display_list else 0)
+
+sort_col_1, sort_col_2 = st.columns([3, 1])
+with sort_col_1:
+    sort_by_display = st.selectbox(
+        "Столбец",
+        sort_display_list,
+        index=_default_idx,
+        key="view_sort_by",
+    )
+    sort_by = sort_display_map[sort_by_display]
+with sort_col_2:
+    sort_asc = st.radio(
+        "Направление",
+        ["↓ Убыв.", "↑ Возр."],
+        index=0,
+        key="view_sort_dir",
+    )
+
+sort_ascending = (sort_asc == "↑ Возр.")
+filtered = filtered.sort_values(sort_by, ascending=sort_ascending, na_position="last")
+
+tags_full = compute_color_tags(filtered, cbr_rate, max_duration)
+
+# Глобальный фильтр по цвету
+if color_filter_on:
+    selected_colors = set()
+    if show_green:
+        selected_colors.add("green")
+    if show_yellow:
+        selected_colors.add("yellow")
+    if show_red:
+        selected_colors.add("red")
+    if show_uncolored:
+        selected_colors.add("uncolored")
+    filtered, tags_full = apply_color_filter(filtered, tags_full, selected_colors)
+    if not selected_colors:
+        st.warning("Все цветовые галочки сняты — таблица и экспорт пусты.")
+
+# Фильтр по цвету конкретного столбца
+if (color_col_filter_on and color_col_name
+        and color_col_name in tags_full.columns and color_col_colors):
+    col_tags = tags_full[color_col_name].fillna("")
+    col_tags = col_tags.replace({"": "uncolored"})
+    mask = col_tags.isin(color_col_colors)
+    filtered = filtered[mask]
+    tags_full = tags_full[mask]
+
+# ================== ВЫБОР СТОЛБЦОВ ==================
 with st.expander("📋 Столбцы для отображения", expanded=False):
     st.caption("Столбцы сгруппированы эмодзи-префиксом. "
                "Столбцы с (X) — из файла Доход.ру.")
@@ -2191,77 +2213,7 @@ use_colors = st.checkbox(
 if income_col in filtered.columns and income_col not in selected_cols:
     selected_cols.insert(0, income_col)
 
-
-def _colors_set():
-    s = set()
-    if show_green:
-        s.add("green")
-    if show_yellow:
-        s.add("yellow")
-    if show_red:
-        s.add("red")
-    if show_uncolored:
-        s.add("uncolored")
-    return s
-
-
-# ========== СОРТИРОВКА (UI) ==========
-st.markdown("### 🔀 Сортировка")
-sort_col_1, sort_col_2 = st.columns([3, 1])
-
-numeric_or_date_cols = [
-    c for c in filtered.columns
-    if pd.api.types.is_numeric_dtype(filtered[c])
-    or pd.api.types.is_datetime64_any_dtype(filtered[c])
-]
-if not numeric_or_date_cols:
-    numeric_or_date_cols = list(filtered.columns)
-
-_default_sort = income_col if income_col in numeric_or_date_cols else numeric_or_date_cols[0]
-_default_idx = (numeric_or_date_cols.index(_default_sort)
-                if _default_sort in numeric_or_date_cols else 0)
-
-with sort_col_1:
-    sort_by = st.selectbox(
-        "Столбец",
-        numeric_or_date_cols,
-        index=_default_idx,
-        key="view_sort_by",
-    )
-with sort_col_2:
-    sort_asc = st.radio(
-        "Направление",
-        ["↓ Убыв.", "↑ Возр."],
-        index=0,
-        key="view_sort_dir",
-    )
-
-sort_ascending = (sort_asc == "↑ Возр.")
-filtered = filtered.sort_values(sort_by, ascending=sort_ascending, na_position="last")
-
-tags_full = compute_color_tags(filtered, cbr_rate, max_duration)
-
-# Глобальный фильтр по цвету
-if color_filter_on:
-    selected_colors = _colors_set()
-    filtered, tags_full = apply_color_filter(filtered, tags_full, selected_colors)
-    if not selected_colors:
-        st.warning("Все цветовые галочки сняты — таблица и экспорт пусты.")
-    st.subheader(f"После цветового фильтра: {len(filtered)} строк")
-
-# Фильтр по цвету конкретного столбца
-if (color_col_filter_on and color_col_name
-        and color_col_name in tags_full.columns and color_col_colors):
-    col_tags = tags_full[color_col_name].fillna("")
-    col_tags = col_tags.replace({"": "uncolored"})
-    mask = col_tags.isin(color_col_colors)
-    filtered = filtered[mask]
-    tags_full = tags_full[mask]
-    st.subheader(
-        f"После фильтра «{color_col_name} ∈ {color_col_colors}»: {len(filtered)} строк"
-    )
-
-# ========== ТАБЛИЦА ==========
+# ================== ТАБЛИЦА ==================
 if not selected_cols:
     st.info("Выберите хотя бы один столбец для отображения. "
             "В CSV при этом всё равно попадут все доступные столбцы.")
@@ -2278,7 +2230,7 @@ else:
     html_table = render_html_table(res, tags_display, display_cols)
     st.markdown(html_table, unsafe_allow_html=True)
 
-# ========== ЭКСПОРТ ==========
+# ================== ЭКСПОРТ ==================
 export_columns_order = list(filtered.columns)
 export_df_full = filtered[export_columns_order].copy()
 export_df_full = export_df_full.rename(columns={c: mark_x(c) for c in export_df_full.columns})
@@ -2298,7 +2250,7 @@ with st.expander("🔍 Все столбцы, попадающие в CSV", expa
              f"Строк: {len(export_df_full)}.")
     st.code("\n".join(export_df_full.columns.tolist()))
 
-# ========== СВОДКА ==========
+# ================== СВОДКА ==================
 if not filtered.empty:
     st.markdown("### 📊 Сводка")
     c1, c2, c3, c4 = st.columns(4)
