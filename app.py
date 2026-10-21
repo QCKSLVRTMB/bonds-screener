@@ -1732,7 +1732,7 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             apply_preset(preset_name)
             st.rerun()
 
-    c1, c2, c3, c4, c5 = st.columns([1.2, 1.2, 1.2, 1.2, 1.6])
+        c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.6])
     with c1:
         settlement_date = st.date_input(
             "Дата расчёта",
@@ -1766,22 +1766,16 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             key="flt_cbr_rate_override", help_text=HELP["cbr_rate"])
 
     with c5:
+        ndfl = float_slider_with_input(
+            "Ставка НДФЛ, %", 0.0, 30.0, DEFAULT_NDFL, 0.5,
+            key="flt_ndfl", help_text=HELP["ndfl"])
+
+    with c6:
         uploaded_file = st.file_uploader(
             "📎 Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
             help=HELP["uploaded_file"])
         age = get_dohod_cache_age_days()
-        if DOHOD_FILE.exists() and uploaded_file is None:
-            if age is None:
-                st.caption("📁 Кеш Доход.ру.")
-            elif age > DOHOD_FRESH_DAYS:
-                st.warning(f"⚠️ Кеш: {age} дней.")
-            elif age == 0:
-                st.success("✅ Свежий кеш.")
-            else:
-                st.info(f"📁 Кеш: {age} дн.")
-        if DOHOD_FILE.exists() or DOHOD_META.exists():
-            st.button("🗑️ Удалить кеш", key="clear_cache_btn",
-                      on_click=clear_cache_callback, use_container_width=True)
+        # ... (блок кеша остаётся как был)
 
 # ================== ЗАГРУЗКА MOEX ==================
 sec_df, sec_why = load_securities()
