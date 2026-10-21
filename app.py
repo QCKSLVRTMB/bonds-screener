@@ -1732,7 +1732,9 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             apply_preset(preset_name)
             st.rerun()
 
-        c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.6])
+    # ВОТ ЭТА СТРОКА СОЗДАЁТ КОЛОНКИ (её не хватало)
+    c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.6])
+    
     with c1:
         settlement_date = st.date_input(
             "Дата расчёта",
@@ -1775,8 +1777,18 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             "📎 Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
             help=HELP["uploaded_file"])
         age = get_dohod_cache_age_days()
-        # ... (блок кеша остаётся как был)
-
+        if DOHOD_FILE.exists() and uploaded_file is None:
+            if age is None:
+                st.caption("📁 Кеш Доход.ру.")
+            elif age > DOHOD_FRESH_DAYS:
+                st.warning(f"⚠️ Кеш: {age} дней.")
+            elif age == 0:
+                st.success("✅ Свежий кеш.")
+            else:
+                st.info(f"📁 Кеш: {age} дн.")
+        if DOHOD_FILE.exists() or DOHOD_META.exists():
+            st.button("🗑️ Удалить кеш", key="clear_cache_btn",
+                      on_click=clear_cache_callback, use_container_width=True)
 # ================== ЗАГРУЗКА MOEX ==================
 sec_df, sec_why = load_securities()
 load_log = []
