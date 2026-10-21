@@ -1613,7 +1613,7 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
     # Добавляем OHLC-бары
-    fig.add_trace(
+      fig.add_trace(
         go.Ohlc(
             x=df["TRADEDATE"],
             open=df["OPEN"],
@@ -1621,9 +1621,9 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
             low=df["LOW"],
             close=df["CLOSE"],
             name="RGBI",
-            increasing_line_color="#2e7d32", # Зелёный при росте
-            decreasing_line_color="#c62828", # Красный при падении
-            line=dict(width=1),
+            increasing_line_color="black",   # Черный цвет
+            decreasing_line_color="black",   # Черный цвет
+            line=dict(width=2),              # Толщина баров (2 пикселя)
             hovertemplate="%{x|%d.%m.%Y}<br>O: %{open:.2f}<br>H: %{high:.2f}<br>L: %{low:.2f}<br>C: %{close:.2f}<extra></extra>"
         ),
         secondary_y=False,
@@ -1756,21 +1756,33 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             "Прогноз ставки ЦБ, п.п.", -5.0, 5.0, DEFAULT_RATE_FORECAST, 0.25,
             key="flt_rate_change", help_text=HELP["rate_change_pp"])
 
-    with c4:
+        with c4:
         _auto_cbr = auto_cbr_rate()
-        if abs(_auto_cbr) < 0.01:
-            st.warning("⚠️ Ставка ЦБ не получена — введите вручную ниже.")
+        if _auto_cbr > 0:
+            st.caption(f"💡 Авто: {_auto_cbr:.2f}% (можно изменить)")
         else:
-            st.success(f"✅ Ставка ЦБ (авто): **{_auto_cbr:.2f}%**")
-        cbr_rate = float_slider_with_input(
-            "Ставка ЦБ (уточнить при необходимости), %",
-            0.0, 50.0, _auto_cbr if _auto_cbr > 0 else 0.0, 0.25,
-            key="flt_cbr_rate_override", help_text=HELP["cbr_rate"])
+            st.caption("💡 Введите значение вручную")
+            
+        cbr_rate = st.number_input(
+            "Текущая ставка ЦБ, %",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(_auto_cbr) if _auto_cbr > 0 else 0.0,
+            step=0.25,
+            key="flt_cbr_rate_override",
+            help=HELP["cbr_rate"]
+        )
 
     with c5:
-        ndfl = float_slider_with_input(
-            "Ставка НДФЛ, %", 0.0, 30.0, DEFAULT_NDFL, 0.5,
-            key="flt_ndfl", help_text=HELP["ndfl"])
+        ndfl = st.number_input(
+            "Ставка НДФЛ, %",
+            min_value=0.0,
+            max_value=50.0,
+            value=DEFAULT_NDFL,
+            step=0.5,
+            key="flt_ndfl",
+            help=HELP["ndfl"]
+        )
 
     with c6:
         uploaded_file = st.file_uploader(
