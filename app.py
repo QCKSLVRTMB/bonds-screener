@@ -1576,13 +1576,13 @@ def auto_cbr_rate() -> float:
 
 
 # ================== RGBI (MOEX ISS) ==================
-RGBI_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
-RGBI_CURRENT_URL = f"{BASE_URL}/engines/stock/markets/index/securities/RGBI.json"
+RGBI_HIST_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
+RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/RGBI.json"
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
-    """Дневные бары RGBI с MOEX ISS (история)."""
+    """Дневные OHLC-бары RGBI из истории MOEX ISS."""
     params = {
         "iss.meta": "off",
         "from": from_date.strftime("%Y-%m-%d"),
@@ -1590,15 +1590,14 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
         "history.columns": "TRADEDATE,OPEN,HIGH,LOW,CLOSE",
     }
     try:
-        r = requests.get(RGBI_URL, params=params, headers=HEADERS, timeout=20)
+        r = requests.get(RGBI_HIST_URL, params=params, headers=HEADERS, timeout=20)
         r.raise_for_status()
         j = r.json()
     except Exception:
         return pd.DataFrame()
 
     block = j.get("history", {}) or {}
-    rows = block.get("data", [])
-    cols = block.get("columns", [])
+    rows, cols = block.get("data", []), block.get("columns", [])
     if not rows:
         return pd.DataFrame()
 
@@ -1611,66 +1610,71 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_rgbi_current() -> dict | None:
-    """Текущий (сегодняшний) бар RGBI из marketdata."""
+    """Текущий (сегодняшний) бар RGBI из marketdata (борд SNDX)."""
     params = {"iss.meta": "off", "iss.only": "marketdata"}
     try:
-        r = requests.get(RGBI_CURRENT_URL, params=params, headers=HEADERS, timeout=10)
+        r = requests.get(RGBI_MKT_URL, params=params, headers=HEADERS, timeout=10)
         r.raise_for_status()
         j = r.json()
         block = j.get("marketdata", {})
-        rows = block.get("data", [])
-        cols = block.get("columns", [])
+        rows, cols = block.get("data", []), block.get("columns", [])
         if not rows:
             return None
         df = pd.DataFrame(rows, columns=cols)
         if df.empty:
             return None
         row = df.iloc[0]
-        o = row.get("OPEN")
-        h = row.get("HIGH")
-        l = row.get("LOW")
-        c = row.get("LAST")
-        sys_time = row.get("SYSTIME", "")
-        if pd.notna(c) and pd.notna(o) and pd.notna(h) and pd.notna(l):
-            trade_date = pd.to_datetime(sys_time[:10]) if sys_time else pd.Timestamp(date.today())
-            if trade_date.date() == date.today():
-                return {
-                    "TRADEDATE": trade_date,
-                    "OPEN": o, "HIGH": h, "LOW": l, "CLOSE": c
-                }
+
+        # MOEX отдаёт данные в полях OPEN/HIGH/LOW/LAST; UPDATE_TIME — время
+        o = pd.to_numeric(row.get("OPEN"), errors="coerce")
+        h = pd.to_numeric(row.get("HIGH"), errors="coerce")
+        l = pd.to_numeric(row.get("LOW"), errors="coerce")
+        c = pd.to_numeric(row.get("LAST"), errors="coerce")
+        # Если LAST нет — берём текущую цену как CLOSE
+        if pd.isna(c):
+            c = pd.to_numeric(row.get("CURRENTVALUE"), errors="coerce")
+        # Если OPEN нет — берём CLOSE как OPEN (рынок только открылся)
+        if pd.isna(o):
+            o = c
+        if pd.isna(h):
+            h = c
+        if pd.isna(l):
+            l = c
+
+        if pd.isna(c) or pd.isna(o) or pd.isna(h) or pd.isna(l):
+            return None
+
+        # Дата бара — сегодня
+        return {
+            "TRADEDATE": pd.Timestamp(date.today()),
+            "OPEN": float(o),
+            "HIGH": float(h),
+            "LOW": float(l),
+            "CLOSE": float(c),
+        }
     except Exception:
-        pass
-    return None
+        return None
 
 
 def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
-    """Недельные OHLC-бары: агрегация дневных данных."""
     if df.empty:
         return df
-    
     df_idx = df.set_index("TRADEDATE")
     res = df_idx.resample("W-FRI").agg({
-        "OPEN": "first",
-        "HIGH": "max",
-        "LOW": "min",
-        "CLOSE": "last"
+        "OPEN": "first", "HIGH": "max",
+        "LOW": "min", "CLOSE": "last"
     }).dropna().reset_index()
-    
     return res.tail(weeks).reset_index(drop=True)
 
 
 def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.Figure:
-    """Биржевой OHLC-график с выноской текущей цены на правой оси."""
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    
-    # Добавляем OHLC-бары (черные и толстые)
+
     fig.add_trace(
         go.Ohlc(
             x=df["TRADEDATE"],
-            open=df["OPEN"],
-            high=df["HIGH"],
-            low=df["LOW"],
-            close=df["CLOSE"],
+            open=df["OPEN"], high=df["HIGH"],
+            low=df["LOW"], close=df["CLOSE"],
             name="RGBI",
             increasing_line_color="black",
             decreasing_line_color="black",
@@ -1683,67 +1687,40 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
     current = float(df["CLOSE"].iloc[-1])
     current_date = df["TRADEDATE"].iloc[-1]
 
-    # Пунктирная линия текущей цены (на правой оси)
     fig.add_trace(
         go.Scatter(
             x=[df["TRADEDATE"].iloc[0], current_date],
             y=[current, current],
             mode="lines",
             line=dict(color="#1a73e8", width=1.5, dash="dot"),
-            name="Текущая цена",
-            showlegend=False,
-            hoverinfo="skip",
+            showlegend=False, hoverinfo="skip",
         ),
         secondary_y=True,
     )
 
-    # Выноска (плашка) с текущей ценой справа
     fig.add_annotation(
-        x=1.01, xref="paper",
-        y=current, yref="y2",
-        text=f"{current:.2f}",
-        showarrow=False,
+        x=1.01, xref="paper", y=current, yref="y2",
+        text=f"{current:.2f}", showarrow=False,
         font=dict(size=12, color="#1a73e8"),
         bgcolor="rgba(255,255,255,0.85)",
-        bordercolor="#1a73e8",
-        borderwidth=1,
-        xanchor="left",
+        bordercolor="#1a73e8", borderwidth=1, xanchor="left",
     )
 
-    # Автомасштабирование под High/Low
     y_min = float(df["LOW"].min()) * 0.999
     y_max = float(df["HIGH"].max()) * 1.001
-
-    # Убираем выходные (субботу и воскресенье) для дневного графика
     rangebreaks = [dict(bounds=["sat", "mon"])] if is_daily else []
 
     fig.update_layout(
-        title=title,
-        height=360,
+        title=title, height=360,
         margin=dict(l=10, r=70, t=40, b=10),
-        xaxis=dict(
-            showgrid=False, 
-            rangeslider_visible=False,
-            rangebreaks=rangebreaks
-        ),
-        yaxis=dict(
-            title="RGBI", 
-            side="left",
-            range=[y_min, y_max],
-            showgrid=True,
-            gridcolor="#eeeeee"
-        ),
-        yaxis2=dict(
-            title="Текущая",
-            overlaying="y",
-            side="right",
-            showgrid=False,
-            range=[y_min, y_max],
-        ),
+        xaxis=dict(showgrid=False, rangeslider_visible=False, rangebreaks=rangebreaks),
+        yaxis=dict(title="RGBI", side="left", range=[y_min, y_max],
+                   showgrid=True, gridcolor="#eeeeee"),
+        yaxis2=dict(title="Текущая", overlaying="y", side="right",
+                    showgrid=False, range=[y_min, y_max]),
         showlegend=False,
     )
     return fig
-
 
 # ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
@@ -1758,19 +1735,21 @@ with st.spinner("Загрузка истории RGBI..."):
         from_date=date.today() - timedelta(days=365 * 5 + 30),
         till_date=date.today(),
     )
-    
-    # Добавляем текущий бар, если он есть и его нет в истории
-    curr_rgbi = fetch_rgbi_current()
-    if curr_rgbi and not rgbi_daily.empty:
-        last_date = rgbi_daily["TRADEDATE"].iloc[-1].date()
-        curr_date = curr_rgbi["TRADEDATE"].date()
-        if last_date < curr_date:
-            rgbi_daily = pd.concat([rgbi_daily, pd.DataFrame([curr_rgbi])], ignore_index=True)
-        elif last_date == curr_date:
-            # Обновляем последнюю строку, чтобы использовать самые свежие данные
-            rgbi_daily.loc[rgbi_daily.index[-1], ["OPEN", "HIGH", "LOW", "CLOSE"]] = [
-                curr_rgbi["OPEN"], curr_rgbi["HIGH"], curr_rgbi["LOW"], curr_rgbi["CLOSE"]
-            ]
+
+curr_rgbi = fetch_rgbi_current()
+current_added = False
+
+if curr_rgbi and not rgbi_daily.empty:
+    last_date = rgbi_daily["TRADEDATE"].iloc[-1].date()
+    curr_date = curr_rgbi["TRADEDATE"].date()
+    if last_date < curr_date:
+        rgbi_daily = pd.concat([rgbi_daily, pd.DataFrame([curr_rgbi])], ignore_index=True)
+        current_added = True
+    elif last_date == curr_date:
+        rgbi_daily.loc[rgbi_daily.index[-1], ["OPEN", "HIGH", "LOW", "CLOSE"]] = [
+            curr_rgbi["OPEN"], curr_rgbi["HIGH"], curr_rgbi["LOW"], curr_rgbi["CLOSE"]
+        ]
+        current_added = True
 
 if not rgbi_daily.empty:
     rgbi_weekly = resample_weekly(rgbi_daily, weeks=260)
@@ -1779,13 +1758,32 @@ if not rgbi_daily.empty:
     col_w, col_d = st.columns(2)
     with col_w:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров, ~5 лет)", is_daily=False),
+            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров)", is_daily=False),
             use_container_width=True,
+        )
+        st.caption(
+            f"Баров: **{len(rgbi_weekly)}** · "
+            f"с {rgbi_weekly['TRADEDATE'].iloc[0]:%d.%m.%Y} "
+            f"по {rgbi_weekly['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
         )
     with col_d:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров, 3 года)", is_daily=True),
+            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров)", is_daily=True),
             use_container_width=True,
+        )
+        st.caption(
+            f"Баров: **{len(rgbi_daily_3y)}** · "
+            f"с {rgbi_daily_3y['TRADEDATE'].iloc[0]:%d.%m.%Y} "
+            f"по {rgbi_daily_3y['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
+        )
+
+    if current_added:
+        st.success(f"✅ Текущий бар от {date.today():%d.%m.%Y} включён в графики.")
+    else:
+        st.info(
+            f"ℹ️ Текущий бар не получен (URL: `SNDX`). "
+            f"Последний доступный бар: "
+            f"**{rgbi_daily['TRADEDATE'].iloc[-1]:%d.%m.%Y}**."
         )
 else:
     st.warning("⚠️ Не удалось загрузить историю RGBI с MOEX ISS.")
