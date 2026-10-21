@@ -1624,7 +1624,7 @@ def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
     return res.tail(weeks).reset_index(drop=True)
 
 
-def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
+def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.Figure:
     """Биржевой OHLC-график с выноской текущей цены на правой оси."""
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
@@ -1679,13 +1679,17 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
     y_min = float(df["LOW"].min()) * 0.999
     y_max = float(df["HIGH"].max()) * 1.001
 
+    # Убираем выходные (субботу и воскресенье) для дневного графика
+    rangebreaks = [dict(bounds=["sat", "mon"])] if is_daily else []
+
     fig.update_layout(
         title=title,
         height=360,
         margin=dict(l=10, r=70, t=40, b=10),
         xaxis=dict(
             showgrid=False, 
-            rangeslider_visible=False
+            rangeslider_visible=False,
+            rangebreaks=rangebreaks
         ),
         yaxis=dict(
             title="RGBI", 
@@ -1727,12 +1731,12 @@ if not rgbi_daily.empty:
     col_w, col_d = st.columns(2)
     with col_w:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров, ~5 лет)"),
+            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров, ~5 лет)", is_daily=False),
             use_container_width=True,
         )
     with col_d:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров, 3 года)"),
+            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров, 3 года)", is_daily=True),
             use_container_width=True,
         )
 else:
