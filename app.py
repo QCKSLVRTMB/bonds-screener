@@ -1612,8 +1612,8 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
     """Биржевой OHLC-график с выноской текущей цены на правой оси."""
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # Добавляем OHLC-бары
-      fig.add_trace(
+    # Добавляем OHLC-бары (черные и толстые)
+    fig.add_trace(
         go.Ohlc(
             x=df["TRADEDATE"],
             open=df["OPEN"],
@@ -1621,9 +1621,9 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
             low=df["LOW"],
             close=df["CLOSE"],
             name="RGBI",
-            increasing_line_color="black",   # Черный цвет
-            decreasing_line_color="black",   # Черный цвет
-            line=dict(width=2),              # Толщина баров (2 пикселя)
+            increasing_line_color="black",
+            decreasing_line_color="black",
+            line=dict(width=2),
             hovertemplate="%{x|%d.%m.%Y}<br>O: %{open:.2f}<br>H: %{high:.2f}<br>L: %{low:.2f}<br>C: %{close:.2f}<extra></extra>"
         ),
         secondary_y=False,
@@ -1756,7 +1756,7 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             "Прогноз ставки ЦБ, п.п.", -5.0, 5.0, DEFAULT_RATE_FORECAST, 0.25,
             key="flt_rate_change", help_text=HELP["rate_change_pp"])
 
-        with c4:
+    with c4:
         _auto_cbr = auto_cbr_rate()
         if _auto_cbr > 0:
             st.caption(f"💡 Авто: {_auto_cbr:.2f}% (можно изменить)")
