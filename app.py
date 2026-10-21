@@ -1593,30 +1593,38 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
 
 
 def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
-    """Недельные closes: последняя цена недели."""
+    """Недельные OHLC-бары: агрегация дневных данных."""
     if df.empty:
         return df
-    w = (
-        df.set_index("TRADEDATE")["CLOSE"]
-        .resample("W-FRI")
-        .last()
-        .dropna()
-        .reset_index()
-    )
-    return w.tail(weeks).reset_index(drop=True)
+    
+    df_idx = df.set_index("TRADEDATE")
+    res = df_idx.resample("W-FRI").agg({
+        "OPEN": "first",
+        "HIGH": "max",
+        "LOW": "min",
+        "CLOSE": "last"
+    }).dropna().reset_index()
+    
+    return res.tail(weeks).reset_index(drop=True)
 
 
 def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """Бары по closes + выноска текущей цены на правой оси."""
+    """Биржевой OHLC-график с выноской текущей цены на правой оси."""
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    colors = np.where(df["CLOSE"].diff().fillna(0) >= 0, "#2e7d32", "#c62828")
+    
+    # Добавляем OHLC-бары
     fig.add_trace(
-        go.Bar(
+        go.Ohlc(
             x=df["TRADEDATE"],
-            y=df["CLOSE"],
+            open=df["OPEN"],
+            high=df["HIGH"],
+            low=df["LOW"],
+            close=df["CLOSE"],
             name="RGBI",
-            marker_color=colors,
-            hovertemplate="%{x|%d.%m.%Y}<br>RGBI: %{y:.2f}<extra></extra>",
+            increasing_line_color="#2e7d32", # Зелёный при росте
+            decreasing_line_color="#c62828", # Красный при падении
+            line=dict(width=1),
+            hovertemplate="%{x|%d.%m.%Y}<br>O: %{open:.2f}<br>H: %{high:.2f}<br>L: %{low:.2f}<br>C: %{close:.2f}<extra></extra>"
         ),
         secondary_y=False,
     )
@@ -1624,12 +1632,13 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
     current = float(df["CLOSE"].iloc[-1])
     current_date = df["TRADEDATE"].iloc[-1]
 
+    # Пунктирная линия текущей цены (на правой оси)
     fig.add_trace(
         go.Scatter(
             x=[df["TRADEDATE"].iloc[0], current_date],
             y=[current, current],
             mode="lines",
-            line=dict(color="#1a73e8", width=2, dash="dot"),
+            line=dict(color="#1a73e8", width=1.5, dash="dot"),
             name="Текущая цена",
             showlegend=False,
             hoverinfo="skip",
@@ -1637,6 +1646,7 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
         secondary_y=True,
     )
 
+    # Выноска (плашка) с текущей ценой справа
     fig.add_annotation(
         x=1.01, xref="paper",
         y=current, yref="y2",
@@ -1649,16 +1659,25 @@ def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
         xanchor="left",
     )
 
-    y_min = float(df["CLOSE"].min()) * 0.98
-    y_max = float(df["CLOSE"].max()) * 1.02
+    # Автомасштабирование под High/Low
+    y_min = float(df["LOW"].min()) * 0.999
+    y_max = float(df["HIGH"].max()) * 1.001
 
     fig.update_layout(
         title=title,
         height=360,
         margin=dict(l=10, r=70, t=40, b=10),
-        bargap=0.1,
-        xaxis=dict(showgrid=False),
-        yaxis=dict(title="RGBI", side="left"),
+        xaxis=dict(
+            showgrid=False, 
+            rangeslider_visible=False # Убираем ползунок под графиком
+        ),
+        yaxis=dict(
+            title="RGBI", 
+            side="left",
+            range=[y_min, y_max],
+            showgrid=True,
+            gridcolor="#eeeeee"
+        ),
         yaxis2=dict(
             title="Текущая",
             overlaying="y",
