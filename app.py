@@ -1582,31 +1582,50 @@ RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/R
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
-    """Дневные OHLC-бары RGBI из истории MOEX ISS."""
-    params = {
+    """Дневные OHLC-бары RGBI с постраничной загрузкой (MOEX ISS отдаёт max 100 строк за раз)."""
+    base_params = {
         "iss.meta": "off",
         "from": from_date.strftime("%Y-%m-%d"),
         "till": till_date.strftime("%Y-%m-%d"),
         "history.columns": "TRADEDATE,OPEN,HIGH,LOW,CLOSE",
     }
-    try:
-        r = requests.get(RGBI_HIST_URL, params=params, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        j = r.json()
-    except Exception:
+    frames = []
+    start = 0
+    page_size = 100
+    max_pages = 50   # 50 × 100 = 5000 баров, с запасом на 5 лет (~1250 торговых дней)
+
+    for _ in range(max_pages):
+        params = {**base_params, "start": start, "limit": page_size}
+        try:
+            r = requests.get(RGBI_HIST_URL, params=params, headers=HEADERS, timeout=20)
+            r.raise_for_status()
+            j = r.json()
+        except Exception:
+            break
+
+        block = j.get("history", {}) or {}
+        rows = block.get("data", [])
+        cols = block.get("columns", [])
+        if not rows:
+            break
+
+        frames.append(pd.DataFrame(rows, columns=cols))
+        if len(rows) < page_size:
+            break
+        start += page_size
+
+    if not frames:
         return pd.DataFrame()
 
-    block = j.get("history", {}) or {}
-    rows, cols = block.get("data", []), block.get("columns", [])
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows, columns=cols)
+    df = pd.concat(frames, ignore_index=True)
     df["TRADEDATE"] = pd.to_datetime(df["TRADEDATE"])
     for c in ("OPEN", "HIGH", "LOW", "CLOSE"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df.dropna(subset=["CLOSE"]).sort_values("TRADEDATE").reset_index(drop=True)
-
+    df = (df.dropna(subset=["CLOSE"])
+            .drop_duplicates("TRADEDATE")
+            .sort_values("TRADEDATE")
+            .reset_index(drop=True))
+    return df
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_rgbi_current() -> dict | None:
