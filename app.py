@@ -32,7 +32,7 @@ DOHOD_FRESH_DAYS = 30
 
 # Количество баров для графиков
 DAILY_BARS = 520     # ~2 года торговых дней
-WEEKLY_BARS = 175    # ~3.4 года недель (пропорционально: 2 года × 1.67)
+WEEKLY_BARS = 175    # ~3.4 года недель
 
 DOHOD_BOND_URL = "https://analytics.dohod.ru/bond/"
 
@@ -101,37 +101,41 @@ EXCEL_COLS = {
     "Название (Доход.ру)", "Тип купона (Доход.ру)",
 }
 
+
 def mark_x(c):
     return f"{c} (X)" if c in EXCEL_COLS else c
+
+
 # ================== РЕШЕНИЯ ЦБ РФ ПО КЛЮЧЕВОЙ СТАВКЕ ==================
 # Формат: (дата, ставка_после_решения, изменение_в_б.п.)
 # Изменение: отрицательное = снижение, положительное = повышение, 0 = сохранение
 CBR_DECISIONS = [
     # 2024 год
-    (date(2024, 12, 20), 21.00, 0),    # сохранение
-    (date(2024, 10, 25), 21.00, +200), # повышение
-    (date(2024, 9, 13), 19.00, +100),  # повышение
-    (date(2024, 7, 26), 18.00, +200),  # повышение
+    (date(2024, 7, 26), 18.00, +200),
+    (date(2024, 9, 13), 19.00, +100),
+    (date(2024, 10, 25), 21.00, +200),
+    (date(2024, 12, 20), 21.00, 0),
     # 2025 год
-    (date(2025, 2, 14), 21.00, 0),     # сохранение
-    (date(2025, 3, 21), 21.00, 0),     # сохранение
-    (date(2025, 4, 25), 21.00, 0),     # сохранение
-    (date(2025, 6, 6), 20.00, -100),   # снижение
-    (date(2025, 7, 25), 18.00, -200),  # снижение
-    (date(2025, 9, 12), 17.00, -100),  # снижение
-    (date(2025, 10, 24), 16.50, -50),  # снижение
-    (date(2025, 12, 19), 16.00, -50),  # снижение
+    (date(2025, 2, 14), 21.00, 0),
+    (date(2025, 3, 21), 21.00, 0),
+    (date(2025, 4, 25), 21.00, 0),
+    (date(2025, 6, 6), 20.00, -100),
+    (date(2025, 7, 25), 18.00, -200),
+    (date(2025, 9, 12), 17.00, -100),
+    (date(2025, 10, 24), 16.50, -50),
+    (date(2025, 12, 19), 16.00, -50),
     # 2026 год
-    (date(2026, 2, 13), 15.50, -50),   # снижение
-    (date(2026, 3, 20), 15.00, -50),   # снижение
-    (date(2026, 4, 24), 14.50, -50),   # снижение
-    (date(2026, 6, 19), 14.25, -25),   # снижение
-    (date(2026, 7, 24), 14.00, -25),   # снижение
-    (date(2026, 9, 11), 14.00, 0),     # сохранение
-    (date(2026, 10, 23), 14.00, 0),    # сохранение (прогноз/факт)
+    (date(2026, 2, 13), 15.50, -50),
+    (date(2026, 3, 20), 15.00, -50),
+    (date(2026, 4, 24), 14.50, -50),
+    (date(2026, 6, 19), 14.25, -25),
+    (date(2026, 7, 24), 14.00, -25),
+    (date(2026, 9, 11), 14.00, 0),
+    (date(2026, 10, 23), 14.00, 0),
     # Будущие заседания (решения пока неизвестны)
     (date(2026, 12, 18), None, None),
 ]
+
 
 # ================== ГРУППЫ СТОЛБЦОВ ==================
 GROUP_EMOJI = {
@@ -181,6 +185,7 @@ COL_GROUP_MAP = {
     "Время обновления": "Макро", "Время загрузки": "Макро",
 }
 
+
 def display_name(col):
     group = COL_GROUP_MAP.get(col, "")
     emoji = GROUP_EMOJI.get(group, "")
@@ -194,8 +199,10 @@ def display_name(col):
                 break
     return f"{emoji} {base}".strip()
 
+
 def display_name_short(col):
     return display_name(col).replace("\n", " ")
+
 
 def base_from_display(disp):
     parts = disp.split(" ", 1)
@@ -207,6 +214,7 @@ def base_from_display(disp):
     if base.endswith(" (X)"):
         base = base[:-4]
     return base.strip()
+
 
 # ================== СПРАВКИ ==================
 HELP = {
@@ -267,6 +275,7 @@ HELP = {
     "income_type": "**Тип доходности** — метрика для сортировки и отображения.",
 }
 
+
 # ================== КЕШ EXCEL ==================
 CACHE_DIR = Path.home() / ".moex_bond_screener"
 try:
@@ -277,8 +286,10 @@ except Exception:
 DOHOD_FILE = CACHE_DIR / "dohod_latest.xlsx"
 DOHOD_META = CACHE_DIR / "dohod_meta.json"
 
+
 def _file_hash(b):
     return hashlib.md5(b).hexdigest()
+
 
 def save_dohod_bytes(data, source="upload"):
     try:
@@ -291,6 +302,7 @@ def save_dohod_bytes(data, source="upload"):
     except Exception:
         pass
 
+
 def load_cached_dohod_bytes():
     if DOHOD_FILE.exists():
         try:
@@ -298,6 +310,7 @@ def load_cached_dohod_bytes():
         except Exception:
             return None
     return None
+
 
 def get_dohod_cache_age_days():
     if not DOHOD_META.exists():
@@ -309,6 +322,7 @@ def get_dohod_cache_age_days():
     except Exception:
         return None
 
+
 def clear_dohod_cache():
     for p in (DOHOD_FILE, DOHOD_META):
         try:
@@ -316,6 +330,7 @@ def clear_dohod_cache():
                 p.unlink()
         except Exception:
             pass
+
 
 # ================== ОТРАСЛЬ ==================
 INDUSTRY_KEYWORDS = {
@@ -337,6 +352,7 @@ INDUSTRY_KEYWORDS = {
     "Ипотечные агенты": ["иа дом", "иадом", "дом.рф", "ипотечный агент", "сфо", "mortgage"],
 }
 
+
 def determine_industry_vectorized(df):
     text_parts = []
     for col in ("Эмитент", "Наименование", "Основной заемщик", "Название (Доход.ру)", "Полное наименование"):
@@ -355,6 +371,7 @@ def determine_industry_vectorized(df):
         result[mask] = industry
     return result
 
+
 # ================== РЕЖИМЫ ТОРГОВ ==================
 BOARD_INFO = {
     "TQCB": {"label": "Корпоративные", "settle": "Т+1", "currency": "₽", "for": "Обычным"},
@@ -370,11 +387,13 @@ BOARD_INFO = {
     "TQUD": {"label": "С ЦК", "settle": "Т+1", "currency": "₽", "for": "Обычным"},
 }
 
+
 def board_label(code):
     info = BOARD_INFO.get(code)
     if info:
         return f"{info['label']} ({code}) · {info['currency']} · {info['settle']}"
     return code
+
 
 # ================== ПАРСЕР EXCEL ==================
 DOHOD_RENAME = {
@@ -390,10 +409,12 @@ DOHOD_RENAME = {
     "С гарантией (да/нет)": "С гарантией", "Отрасль": "Отрасль",
 }
 
+
 def _to_bytesio(x):
     if isinstance(x, (bytes, bytearray)):
         return io.BytesIO(x)
     return x
+
 
 def parse_dohod_file(uploaded):
     try:
@@ -416,9 +437,11 @@ def parse_dohod_file(uploaded):
         renamed["Отрасль"] = determine_industry_vectorized(renamed)
     return renamed, None
 
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def parse_dohod_cached(file_bytes: bytes):
     return parse_dohod_file(io.BytesIO(file_bytes))
+
 
 # ================== СПРАВКА ПО СТОЛБЦАМ ==================
 COLUMN_HELP = {
@@ -522,6 +545,7 @@ INT_COLS = {"Количество сделок", "Объем в бумагах",
 _COLOR_BG = {"green": "#c6efce", "yellow": "#ffeb9c", "red": "#ffc7ce"}
 _COLOR_FG = {"green": "#006100", "yellow": "#9c6500", "red": "#9c0006"}
 
+
 def _fmt_cell(val, base_col):
     if pd.isna(val):
         return ""
@@ -538,6 +562,7 @@ def _fmt_cell(val, base_col):
     if isinstance(val, (int, float, np.integer, np.floating)):
         return f"{val:.2f}"
     return _html.escape(str(val))
+
 
 def render_html_table(df, tags, display_cols_map):
     headers = [display_cols_map[c] for c in df.columns]
@@ -581,6 +606,7 @@ def render_html_table(df, tags, display_cols_map):
         parts.append("</tr>")
     parts.append("</tbody></table></div>")
     return "".join(parts)
+
 
 # ================== ГРУППЫ ДЛЯ UI ==================
 COLUMN_GROUPS = {
@@ -648,6 +674,7 @@ DEFAULT_VISIBLE_COLS = {
     "Ликвидность (комбинир.)",
 }
 
+
 # ================== ЦВЕТА ==================
 COLOR_CSS = {
     "green": "background-color: #c6efce; color: #006100;",
@@ -655,11 +682,13 @@ COLOR_CSS = {
     "red": "background-color: #ffc7ce; color: #9c0006;",
 }
 
+
 def _is_rub_series(df):
     if "Валюта номинала" not in df.columns:
         return pd.Series(False, index=df.index)
     cur = df["Валюта номинала"].astype(str).str.strip().str.upper()
     return cur.isin(RUB_CURRENCIES)
+
 
 def compute_color_tags(df, cbr_rate, max_duration):
     tags = pd.DataFrame("", index=df.index, columns=df.columns)
@@ -788,6 +817,7 @@ def compute_color_tags(df, cbr_rate, max_duration):
 
     return tags
 
+
 # ================== ЗАГРУЗЧИКИ ==================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_securities_page(start, page_size=PAGE_SIZE):
@@ -805,6 +835,7 @@ def fetch_securities_page(start, page_size=PAGE_SIZE):
     if not rows:
         return pd.DataFrame(columns=cols), None
     return pd.DataFrame(rows, columns=cols), None
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_marketdata_page(board, start, page_size=PAGE_SIZE):
@@ -825,6 +856,7 @@ def fetch_marketdata_page(board, start, page_size=PAGE_SIZE):
     if "BOARDID" not in df.columns:
         df["BOARDID"] = board
     return df, None
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_securities_cached():
@@ -853,6 +885,7 @@ def _load_securities_cached():
         df = df.drop_duplicates(subset=["SECID", "BOARDID"])
     return df, stop_reason
 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_marketdata_cached(board):
     frames, seen = [], set()
@@ -880,10 +913,12 @@ def _load_marketdata_cached(board):
         df = df.drop_duplicates(subset=["SECID", "BOARDID"])
     return df, stop_reason
 
+
 def load_securities():
     with st.spinner("Загрузка securities..."):
         df, why = _load_securities_cached()
     return df, why
+
 
 def load_marketdata_for_board(board):
     with st.spinner(f"Загрузка marketdata: {board}..."):
@@ -1075,6 +1110,7 @@ def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
 
     return df
 
+
 # ================== ФИЛЬТРЫ ==================
 def keep(f, col, mask, keep_na):
     if col not in f.columns:
@@ -1083,7 +1119,9 @@ def keep(f, col, mask, keep_na):
         return f[f[col].isna() | mask]
     return f[mask]
 
+
 _SUBORD_YES = {"да", "yes", "true", "1", "+"}
+
 
 def apply_filters(f, o):
     keep_na = o["keep_na"]
@@ -1217,6 +1255,7 @@ def apply_filters(f, o):
 
     return f
 
+
 def apply_color_filter(res_df, tags_df, selected_colors):
     if not selected_colors:
         return res_df.iloc[0:0], tags_df.iloc[0:0]
@@ -1230,6 +1269,7 @@ def apply_color_filter(res_df, tags_df, selected_colors):
     if "uncolored" in selected_colors:
         match = match | (tags_df == "").all(axis=1)
     return res_df[match], tags_df[match]
+
 
 # ================== ВИДЖЕТЫ С КНОПКАМИ «−» / «+» ==================
 def float_slider_with_input(label_display, min_v, max_v, default, step, key,
@@ -1295,6 +1335,7 @@ def float_slider_with_input(label_display, min_v, max_v, default, step, key,
                   use_container_width=True)
     return float(st.session_state[slider_key])
 
+
 def int_slider_with_input(label_display, min_v, max_v, default, step, key,
                           help_text="", is_excel=False, hint=""):
     slider_key = f"{key}_slider"
@@ -1358,19 +1399,23 @@ def int_slider_with_input(label_display, min_v, max_v, default, step, key,
                   use_container_width=True)
     return int(st.session_state[slider_key])
 
+
 # ================== СБРОС / ПРЕСЕТЫ ==================
 def reset_all_filters():
     for k in list(st.session_state.keys()):
         if k.startswith("flt_") or k.startswith("colsel_") or k.startswith("view_"):
             del st.session_state[k]
 
+
 def reset_button_callback():
     reset_all_filters()
     st.toast("Фильтры сброшены к параметрам стратегии", icon="✅")
 
+
 def clear_cache_callback():
     clear_dohod_cache()
     st.toast("Кеш Доход.ру удалён", icon="🗑️")
+
 
 def apply_preset(preset_name):
     if preset_name not in PRESETS:
@@ -1380,6 +1425,7 @@ def apply_preset(preset_name):
         st.session_state[f"{k}_slider"] = v
         st.session_state[f"{k}_num"] = v
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
+
 
 # ================== АВТОСТАВКА ЦБ РФ ==================
 CBR_KEY_RATE_URL = "https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx"
@@ -1395,6 +1441,7 @@ CBR_KEY_RATE_SOAP = """<?xml version="1.0" encoding="utf-8"?>
     </KeyRateXML>
   </soap:Body>
 </soap:Envelope>"""
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def auto_cbr_rate() -> float:
@@ -1437,13 +1484,15 @@ def auto_cbr_rate() -> float:
         )
         return 0.0
 
+
 # ================== RGBI (MOEX ISS) ==================
 RGBI_HIST_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
 RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/RGBI.json"
 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
-    """Дневные OHLC-бары RGBI с постраничной загрузкой (MOEX ISS отдаёт max 100 строк за раз)."""
+    """Дневные OHLC-бары RGBI с постраничной загрузкой."""
     base_params = {
         "iss.meta": "off",
         "from": from_date.strftime("%Y-%m-%d"),
@@ -1453,7 +1502,7 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
     frames = []
     start = 0
     page_size = 100
-    max_pages = 50   # 50 × 100 = 5000 баров
+    max_pages = 50
 
     for _ in range(max_pages):
         params = {**base_params, "start": start, "limit": page_size}
@@ -1487,6 +1536,7 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
             .sort_values("TRADEDATE")
             .reset_index(drop=True))
     return df
+
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_rgbi_current() -> dict | None:
@@ -1529,6 +1579,7 @@ def fetch_rgbi_current() -> dict | None:
     except Exception:
         return None
 
+
 def resample_weekly(df: pd.DataFrame, weeks: int = WEEKLY_BARS) -> pd.DataFrame:
     if df.empty:
         return df
@@ -1538,6 +1589,7 @@ def resample_weekly(df: pd.DataFrame, weeks: int = WEEKLY_BARS) -> pd.DataFrame:
         "LOW": "min", "CLOSE": "last"
     }).dropna().reset_index()
     return res.tail(weeks).reset_index(drop=True)
+
 
 def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.Figure:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -1584,7 +1636,7 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
 
     fig.update_layout(
         title=title, height=360,
-        margin=dict(l=10, r=70, t=40, b=10),
+        margin=dict(l=10, r=70, t=60, b=10),
         xaxis=dict(showgrid=False, rangeslider_visible=False, rangebreaks=rangebreaks),
         yaxis=dict(title="RGBI", side="left", range=[y_min, y_max],
                    showgrid=True, gridcolor="#eeeeee"),
@@ -1593,7 +1645,82 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
         showlegend=False,
     )
     return fig
-      # ================== ИНТЕРФЕЙС ==================
+
+
+def add_cbr_decisions_to_chart(fig: go.Figure, decisions: list,
+                               show_past: bool = True,
+                               show_future: bool = True) -> go.Figure:
+    """Добавляет вертикальные линии и подписи с решениями ЦБ РФ."""
+    today = date.today()
+
+    for dt, rate, change in decisions:
+        is_future = dt > today
+        if (is_future and not show_future) or (not is_future and not show_past):
+            continue
+
+        if is_future:
+            line_color, line_dash, line_width = "#888888", "dot", 1
+            text_color = "#888888"
+            bg_color, border_color = "rgba(255,255,255,0.85)", "#888888"
+        elif change is None:
+            line_color, line_dash, line_width = "#cccccc", "solid", 1
+            text_color = "#666666"
+            bg_color, border_color = "#f5f5f5", "#9e9e9e"
+        elif change < 0:
+            line_color, line_dash, line_width = "#2e7d32", "solid", 1
+            text_color = "#1b5e20"
+            bg_color, border_color = "#e8f5e9", "#2e7d32"
+        elif change > 0:
+            line_color, line_dash, line_width = "#c62828", "solid", 1
+            text_color = "#b71c1c"
+            bg_color, border_color = "#ffebee", "#c62828"
+        else:
+            line_color, line_dash, line_width = "#9e9e9e", "solid", 1
+            text_color = "#616161"
+            bg_color, border_color = "#f5f5f5", "#9e9e9e"
+
+        ts = pd.Timestamp(dt)
+
+        fig.add_shape(
+            type="line",
+            x0=ts, x1=ts,
+            y0=0, y1=1, yref="paper",
+            line=dict(color=line_color, width=line_width, dash=line_dash),
+            opacity=0.7,
+        )
+
+        if rate is not None and change is not None:
+            if change < 0:
+                arrow = "↓"
+            elif change > 0:
+                arrow = "↑"
+            else:
+                arrow = "→"
+            rate_str = f"{rate:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+            change_str = f" ({change:+d} б.п.)" if change != 0 else ""
+            text = f"{arrow} {rate_str}%{change_str}"
+        elif is_future:
+            text = "❓"
+        else:
+            text = ""
+
+        if text:
+            fig.add_annotation(
+                x=ts, xref="x",
+                y=1.0, yref="paper",
+                yanchor="bottom", yshift=2,
+                text=text,
+                showarrow=False,
+                font=dict(size=8, color=text_color),
+                bgcolor=bg_color,
+                bordercolor=border_color,
+                borderwidth=1,
+                borderpad=1,
+                opacity=0.9 if not is_future else 0.6,
+            )
+
+    return fig
+# ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
 st.title("📊 Скринер облигаций QCKSLVR TRADING")
 st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/qckslvrtrading)")
@@ -1626,30 +1753,38 @@ if not rgbi_daily.empty:
     rgbi_weekly = resample_weekly(rgbi_daily, weeks=WEEKLY_BARS)
     rgbi_daily_short = rgbi_daily.tail(DAILY_BARS).reset_index(drop=True)
 
+    # Чекбокс для отображения решений ЦБ
+    show_cbr = st.checkbox(
+        "Показывать решения ЦБ по ключевой ставке",
+        value=True,
+        key="show_cbr_decisions",
+        help="Вертикальные линии и пометки в даты заседаний Совета директоров Банка России.",
+    )
+
     col_w, col_d = st.columns(2)
     with col_w:
-        st.plotly_chart(
-            make_rgbi_chart(
-                rgbi_weekly,
-                f"RGBI — недельный таймфрейм ({len(rgbi_weekly)} баров, ~{len(rgbi_weekly)/52:.1f} г.)",
-                is_daily=False,
-            ),
-            use_container_width=True,
+        fig_w = make_rgbi_chart(
+            rgbi_weekly,
+            f"RGBI — недельный таймфрейм ({len(rgbi_weekly)} баров, ~{len(rgbi_weekly)/52:.1f} г.)",
+            is_daily=False,
         )
+        if show_cbr:
+            fig_w = add_cbr_decisions_to_chart(fig_w, CBR_DECISIONS)
+        st.plotly_chart(fig_w, use_container_width=True)
         st.caption(
             f"Показано: **{len(rgbi_weekly)}** недель · "
             f"{rgbi_weekly['TRADEDATE'].iloc[0]:%d.%m.%Y} → "
             f"{rgbi_weekly['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
         )
     with col_d:
-        st.plotly_chart(
-            make_rgbi_chart(
-                rgbi_daily_short,
-                f"RGBI — дневной таймфрейм ({len(rgbi_daily_short)} баров, ~{len(rgbi_daily_short)/260:.1f} г.)",
-                is_daily=True,
-            ),
-            use_container_width=True,
+        fig_d = make_rgbi_chart(
+            rgbi_daily_short,
+            f"RGBI — дневной таймфрейм ({len(rgbi_daily_short)} баров, ~{len(rgbi_daily_short)/260:.1f} г.)",
+            is_daily=True,
         )
+        if show_cbr:
+            fig_d = add_cbr_decisions_to_chart(fig_d, CBR_DECISIONS)
+        st.plotly_chart(fig_d, use_container_width=True)
         st.caption(
             f"Показано: **{len(rgbi_daily_short)}** дней · "
             f"{rgbi_daily_short['TRADEDATE'].iloc[0]:%d.%m.%Y} → "
@@ -2003,6 +2138,7 @@ industry_options = (sorted(df["Отрасль"].dropna().astype(str).unique().to
 bond_type_options = (sorted(df["Тип бумаги"].dropna().astype(str).unique().tolist())
                      if "Тип бумаги" in df.columns else [])
 
+
 def checkbox_group(options, key_prefix, default_selected, n_cols=2):
     selected = []
     cols = st.columns(n_cols)
@@ -2013,6 +2149,7 @@ def checkbox_group(options, key_prefix, default_selected, n_cols=2):
         if checked:
             selected.append(opt)
     return selected
+
 
 # ================== ФИЛЬТРЫ ПОД СТРАТЕГИЮ ==================
 with st.expander("🎯 Фильтры под стратегию", expanded=True):
@@ -2554,3 +2691,4 @@ if not filtered.empty:
             st.caption("**Отрасли (X)**")
             st.dataframe(filtered["Отрасль"].value_counts().head(15)
                          .rename("Количество"), use_container_width=True)
+                                 
