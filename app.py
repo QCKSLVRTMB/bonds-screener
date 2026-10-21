@@ -6,13 +6,17 @@ import io
 import json
 import hashlib
 import html as _html
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # ================== НАСТРОЙКИ ==================
 BASE_URL = "https://iss.moex.com/iss"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-DEFAULT_DATE = date.today()
+DEFAULT_DATE = date(2026, 10, 21)
+DEFAULT_FORECAST_DATE = date(2027, 10, 21)
 DEFAULT_NDFL = 13.0
 DEFAULT_RATE_FORECAST = 0.0
 DEFAULT_MAX_DURATION = 10.0
@@ -216,7 +220,6 @@ def display_name(col):
 
 
 def display_name_short(col):
-    """Название столбца без переносов — для selectbox сортировки."""
     return display_name(col).replace("\n", " ")
 
 
@@ -235,15 +238,22 @@ def base_from_display(disp):
 # ================== СПРАВКИ ==================
 HELP = {
     "settlement_date": "**Дата расчёта** — от неё считаются сроки до погашения и оферты.",
+    "forecast_date": (
+        "**Дата прогноза** — к этой дате применяется сдвиг ключевой ставки. "
+        "Срок от даты расчёта до этой даты используется в «Потенциальной "
+        "доходности» (купон учитывается за весь этот срок)."
+    ),
     "rate_change_pp": (
-        "**Прогноз ставки ЦБ** — на сколько п.п. вы ждёте изменения ключевой ставки.\n\n"
-        "Влияет на «Прогнозную цену», «Потенциальную доходность» и «Рыночный риск».\n\n"
+        "**Прогноз ставки ЦБ** — на сколько п.п. изменится ключевая ставка "
+        "**к выбранной дате прогноза**.\n\n"
+        "Влияет на «Прогнозную цену», «Потенциальную доходность» и "
+        "«Рыночный риск».\n\n"
         "• **−1…−2 п.п.** = ставки падают → длинные бумаги выгоднее.\n"
         "• **+1…+2 п.п.** = ставки растут → короткие безопаснее.\n"
         "• **0** = нейтрально (для «Рыночного риска» включается стресс-тест)."
     ),
     "ndfl": "**Ставка НДФЛ** — налог на купонный доход. Уменьшает реальную доходность.",
-    "cbr_rate": "**Текущая ставка ЦБ** — базовый ориентир. Всё, что ниже — неинтересно.",
+    "cbr_rate": "**Текущая ставка ЦБ** — подтягивается автоматически с сайта Банка России. Можно скорректировать вручную.",
     "uploaded_file": "**Excel Доход.ру (X)** — файл с метриками качества эмитента, которых нет на MOEX.",
     "industries": "**Отрасль (X)** — сектор экономики. Для диверсификации.",
     "issuer_types": "**Тип эмитента (X):** Гос / Субфед / Муницип / Корп.",
@@ -262,7 +272,11 @@ HELP = {
     "max_eff_days": "**Макс. эффективный срок** — отсекает бумаги с далёкой офертой.",
     "only_with_maturity": "**Только с датой погашения** — исключить бессрочные (вечные).",
     "only_with_offer": "**Только с офертой** — бумаги, где можно вернуть номинал.",
-    "min_potential_return": "**Потенциальная доходность** — сколько заработаете за 1 год, если прогноз ставки сбудется.",
+    "min_potential_return": (
+        "**Потенциальная доходность** — сколько заработаете **за срок от даты "
+        "расчёта до даты прогноза**, если прогноз ставки сбудется. Купон "
+        "учитывается за весь этот срок, а не только за один год."
+    ),
     "only_with_ytm": "**Только с YTM** — бумаги с рассчитанной доходностью к погашению.",
     "min_ytm": "**Мин. YTM** — нижняя граница доходности.",
     "max_ytm": "**Макс. YTM** — выше 30% часто означает риск дефолта.",
@@ -554,8 +568,8 @@ COLUMN_HELP = {
     "Лет до даты (Доход.ру)": "Срок в годах (X).",
     "Ближайшая дата, лет": "Срок в годах до ближайшего события.",
     "Событие": "Оферта или погашение — что раньше.",
-    "Потенциальная доходность, %": "Сколько заработаете за 1 год при заданном прогнозе ставки.",
-    "Прогнозная цена, %": "Цена через год при заданном изменении ставки.",
+    "Потенциальная доходность, %": "Сколько заработаете за срок до даты прогноза при заданном сдвиге ставки.",
+    "Прогнозная цена, %": "Цена к дате прогноза при заданном изменении ставки.",
     "YTM, %": "Эффективная доходность к погашению (с реинвестированием).",
     "Чистый YTM, %": "YTM после НДФЛ.",
     "YTC, %": "Доходность к оферте.",
@@ -989,10 +1003,8 @@ def load_marketdata_for_board(board):
     with st.spinner(f"Загрузка marketdata: {board}..."):
         df, why = _load_marketdata_cached(board)
     return df, why
-
-
-# ================== МЕТРИКИ ==================
-def enrich(df, settlement_date, ndfl, rate_change_pp):
+  # ================== МЕТРИКИ ==================
+def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
     df = df.copy()
 
     for src, tgt in [("Дата погашения", "Дней до погашения"),
@@ -1078,7 +1090,13 @@ def enrich(df, settlement_date, ndfl, rate_change_pp):
     else:
         df["Простая доходность, %"] = np.nan
 
-    if (price_col and "Дюрация, лет" in df.columns and "Годовой купон" in df.columns
+    # срок до даты прогноза в годах
+    T = (pd.Timestamp(forecast_date) - pd.Timestamp(settlement_date)).days / 365.0
+    if T <= 0:
+        T = 1.0 / 365.0   # защита от нулевого/отрицательного срока
+
+    if (price_col and "Дюрация, лет" in df.columns
+            and "Годовой купон" in df.columns
             and "Номинал" in df.columns and "НКД" in df.columns):
         delta_y = rate_change_pp / 100.0
         convexity = df["Дюрация, лет"] ** 2
@@ -1086,8 +1104,11 @@ def enrich(df, settlement_date, ndfl, rate_change_pp):
                             + 0.5 * convexity * delta_y ** 2) * 100.0
         df["Прогнозная цена, %"] = df[price_col] * (1 + price_change_pct / 100.0)
         future_dirty = df["Прогнозная цена, %"] / 100.0 * df["Номинал"] + df["НКД"]
+
+        # купон за ВЕСЬ срок до даты прогноза
+        coupon_for_period = df["Годовой купон"] * T
         df["Потенциальная доходность, %"] = (
-            (future_dirty - df["Грязная цена"] + df["Годовой купон"])
+            (future_dirty - df["Грязная цена"] + coupon_for_period)
             / df["Грязная цена"] * 100.0
         )
 
@@ -1479,12 +1500,208 @@ def apply_preset(preset_name):
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
 
 
-# ================== ИНТЕРФЕЙС ==================
+# ================== АВТОСТАВКА ЦБ РФ ==================
+CBR_KEY_RATE_URL = "https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx"
+
+CBR_KEY_RATE_SOAP = """<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <KeyRateXML xmlns="http://web.cbr.ru/">
+      <fromDate>{from_date}</fromDate>
+      <ToDate>{to_date}</ToDate>
+    </KeyRateXML>
+  </soap:Body>
+</soap:Envelope>"""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def auto_cbr_rate() -> float:
+    """Возвращает последнюю известную ключевую ставку ЦБ РФ (в %)."""
+    date_to = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+    soap = CBR_KEY_RATE_SOAP.format(from_date=date_from, to_date=date_to)
+    try:
+        r = requests.post(
+            CBR_KEY_RATE_URL,
+            data=soap.encode("utf-8"),
+            headers={
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": "http://web.cbr.ru/KeyRateXML",
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+
+        outer = ET.fromstring(r.text)
+        ns = {"soap": "http://schemas.xmlsoap.org/soap/envelope/"}
+        body = outer.find("soap:Body", ns)
+        if body is None:
+            raise ValueError("SOAP-ответ без Body")
+        result = body.find(".//{http://web.cbr.ru/}KeyRateXMLResult")
+        if result is None or not result.text:
+            raise ValueError("пустой KeyRateXMLResult")
+
+        inner = ET.fromstring(result.text)
+        kr_nodes = inner.findall(".//{http://web.cbr.ru/}KR")
+        if not kr_nodes:
+            raise ValueError("нет узлов KR в ответе")
+
+        last = kr_nodes[-1]
+        rate = float(last.attrib.get("Rate", "0").replace(",", "."))
+        return rate
+    except Exception as e:
+        st.warning(
+            f"⚠️ Не удалось получить ставку ЦБ автоматически: {e}. "
+            f"Использую 0 — скорректируйте вручную."
+        )
+        return 0.0
+
+
+# ================== RGBI (MOEX ISS) ==================
+RGBI_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
+    """Дневные бары RGBI с MOEX ISS."""
+    params = {
+        "iss.meta": "off",
+        "from": from_date.strftime("%Y-%m-%d"),
+        "till": till_date.strftime("%Y-%m-%d"),
+        "history.columns": "TRADEDATE,OPEN,HIGH,LOW,CLOSE",
+    }
+    try:
+        r = requests.get(RGBI_URL, params=params, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        j = r.json()
+    except Exception:
+        return pd.DataFrame()
+
+    block = j.get("history", {}) or {}
+    rows = block.get("data", [])
+    cols = block.get("columns", [])
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows, columns=cols)
+    df["TRADEDATE"] = pd.to_datetime(df["TRADEDATE"])
+    for c in ("OPEN", "HIGH", "LOW", "CLOSE"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df.dropna(subset=["CLOSE"]).sort_values("TRADEDATE").reset_index(drop=True)
+
+
+def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
+    """Недельные closes: последняя цена недели."""
+    if df.empty:
+        return df
+    w = (
+        df.set_index("TRADEDATE")["CLOSE"]
+        .resample("W-FRI")
+        .last()
+        .dropna()
+        .reset_index()
+    )
+    return w.tail(weeks).reset_index(drop=True)
+
+
+def make_rgbi_chart(df: pd.DataFrame, title: str) -> go.Figure:
+    """Бары по closes + выноска текущей цены на правой оси."""
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    colors = np.where(df["CLOSE"].diff().fillna(0) >= 0, "#2e7d32", "#c62828")
+    fig.add_trace(
+        go.Bar(
+            x=df["TRADEDATE"],
+            y=df["CLOSE"],
+            name="RGBI",
+            marker_color=colors,
+            hovertemplate="%{x|%d.%m.%Y}<br>RGBI: %{y:.2f}<extra></extra>",
+        ),
+        secondary_y=False,
+    )
+
+    current = float(df["CLOSE"].iloc[-1])
+    current_date = df["TRADEDATE"].iloc[-1]
+
+    fig.add_trace(
+        go.Scatter(
+            x=[df["TRADEDATE"].iloc[0], current_date],
+            y=[current, current],
+            mode="lines",
+            line=dict(color="#1a73e8", width=2, dash="dot"),
+            name="Текущая цена",
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        secondary_y=True,
+    )
+
+    fig.add_annotation(
+        x=1.01, xref="paper",
+        y=current, yref="y2",
+        text=f"{current:.2f}",
+        showarrow=False,
+        font=dict(size=12, color="#1a73e8"),
+        bgcolor="rgba(255,255,255,0.85)",
+        bordercolor="#1a73e8",
+        borderwidth=1,
+        xanchor="left",
+    )
+
+    y_min = float(df["CLOSE"].min()) * 0.98
+    y_max = float(df["CLOSE"].max()) * 1.02
+
+    fig.update_layout(
+        title=title,
+        height=360,
+        margin=dict(l=10, r=70, t=40, b=10),
+        bargap=0.1,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title="RGBI", side="left"),
+        yaxis2=dict(
+            title="Текущая",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+            range=[y_min, y_max],
+        ),
+        showlegend=False,
+    )
+    return fig
+  # ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
 st.title("📊 Скринер облигаций QCKSLVR TRADING")
 st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/qckslvrtrading)")
 st.caption("Столбцы и фильтры из Excel Доход.ру помечены «(X)». "
            "Клик по SECID открывает карточку на analytics.dohod.ru.")
+
+# ================== ГРАФИКИ RGBI (над параметрами стратегии) ==================
+with st.spinner("Загрузка истории RGBI..."):
+    rgbi_daily = fetch_rgbi_daily(
+        from_date=date.today() - timedelta(days=365 * 5 + 30),
+        till_date=date.today(),
+    )
+
+if not rgbi_daily.empty:
+    rgbi_weekly = resample_weekly(rgbi_daily, weeks=260)
+    rgbi_daily_3y = rgbi_daily.tail(1095).reset_index(drop=True)
+
+    col_w, col_d = st.columns(2)
+    with col_w:
+        st.plotly_chart(
+            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров, ~5 лет)"),
+            use_container_width=True,
+        )
+    with col_d:
+        st.plotly_chart(
+            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров, 3 года)"),
+            use_container_width=True,
+        )
+else:
+    st.warning("⚠️ Не удалось загрузить историю RGBI с MOEX ISS.")
+
+st.markdown("---")
 
 # ================== ПАРАМЕТРЫ СТРАТЕГИИ ==================
 with st.expander("⚙️ Параметры стратегии", expanded=True):
@@ -1496,23 +1713,39 @@ with st.expander("⚙️ Параметры стратегии", expanded=True):
             apply_preset(preset_name)
             st.rerun()
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5 = st.columns([1.2, 1.2, 1.2, 1.2, 1.6])
     with c1:
         settlement_date = st.date_input(
-            "Дата расчёта", value=DEFAULT_DATE, key="flt_settlement_date",
-            help=HELP["settlement_date"])
+            "Дата расчёта",
+            value=DEFAULT_DATE,
+            format="DD.MM.YYYY",
+            key="flt_settlement_date",
+            help=HELP["settlement_date"],
+        )
     with c2:
+        forecast_date = st.date_input(
+            "Дата прогноза ставки",
+            value=DEFAULT_FORECAST_DATE,
+            format="DD.MM.YYYY",
+            key="flt_forecast_date",
+            help=HELP["forecast_date"],
+        )
+    with c3:
         rate_change_pp = float_slider_with_input(
             "Прогноз ставки ЦБ, п.п.", -5.0, 5.0, DEFAULT_RATE_FORECAST, 0.25,
             key="flt_rate_change", help_text=HELP["rate_change_pp"])
-    with c3:
-        ndfl = float_slider_with_input(
-            "Ставка НДФЛ, %", 0.0, 30.0, DEFAULT_NDFL, 0.5,
-            key="flt_ndfl", help_text=HELP["ndfl"])
+
     with c4:
+        _auto_cbr = auto_cbr_rate()
+        if abs(_auto_cbr) < 0.01:
+            st.warning("⚠️ Ставка ЦБ не получена — введите вручную ниже.")
+        else:
+            st.success(f"✅ Ставка ЦБ (авто): **{_auto_cbr:.2f}%**")
         cbr_rate = float_slider_with_input(
-            "Текущая ставка ЦБ, %", 0.0, 50.0, 0.0, 0.25,
-            key="flt_cbr_rate", help_text=HELP["cbr_rate"])
+            "Ставка ЦБ (уточнить при необходимости), %",
+            0.0, 50.0, _auto_cbr if _auto_cbr > 0 else 0.0, 0.25,
+            key="flt_cbr_rate_override", help_text=HELP["cbr_rate"])
+
     with c5:
         uploaded_file = st.file_uploader(
             "📎 Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
@@ -1693,7 +1926,7 @@ if dohod_bytes:
 
 # ================== ENRICH ==================
 with st.spinner("Расчёт метрик..."):
-    df = enrich(df, settlement_date, ndfl, rate_change_pp)
+    df = enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp)
 
 # ================== ДИНАМИЧЕСКИЕ ФИЛЬТРЫ ==================
 currency_options = (sorted(df["Валюта номинала"].dropna().unique().tolist())
@@ -1728,7 +1961,7 @@ def checkbox_group(options, key_prefix, default_selected, n_cols=2):
     return selected
 
 
-# ================== ФИЛЬТРЫ ПОД СТРАТЕГИЮ (сетка expander'ов) ==================
+# ================== ФИЛЬТРЫ ПОД СТРАТЕГИЮ ==================
 with st.expander("🎯 Фильтры под стратегию", expanded=True):
 
     # --- Ряд 1: Рынок | Купон | Сроки ---
