@@ -30,6 +30,10 @@ DEFAULT_MIN_CREDIT_QUALITY = 0.0
 DEFAULT_MAX_COMPLEXITY = 7.0
 DOHOD_FRESH_DAYS = 30
 
+# Количество баров для графиков
+DAILY_BARS = 520     # ~2 года торговых дней
+WEEKLY_BARS = 175    # ~3.4 года недель (пропорционально: 2 года × 1.67)
+
 DOHOD_BOND_URL = "https://analytics.dohod.ru/bond/"
 
 BOND_BOARDS = ["TQCB", "TQOB", "TQOY", "TQOD", "TQIF", "TQTF",
@@ -51,67 +55,39 @@ INCOME_TYPE_MAP = {
 
 PRESETS = {
     "🏦 Замена депозита (консервативный)": {
-        "flt_min_days_maturity": 365,
-        "flt_max_days_maturity": 1095,
-        "flt_max_duration": 2.0,
-        "flt_max_group": 2,
-        "flt_min_credit_quality": 7.0,
-        "flt_max_complexity": 0.0,
-        "flt_only_non_subordinated": True,
-        "flt_min_volume": 5_000_000,
-        "flt_max_spread": 0.3,
-        "flt_min_potential_return": 3.0,
-        "flt_currency_filter": ["SUR", "RUB"],
-        "flt_board_filter": ["TQCB", "TQOB"],
-        "flt_rate_change": 0.0,
-        "flt_only_with_price": True,
-        "flt_only_with_maturity": True,
+        "flt_min_days_maturity": 365, "flt_max_days_maturity": 1095,
+        "flt_max_duration": 2.0, "flt_max_group": 2, "flt_min_credit_quality": 7.0,
+        "flt_max_complexity": 0.0, "flt_only_non_subordinated": True,
+        "flt_min_volume": 5_000_000, "flt_max_spread": 0.3,
+        "flt_min_potential_return": 3.0, "flt_currency_filter": ["SUR", "RUB"],
+        "flt_board_filter": ["TQCB", "TQOB"], "flt_rate_change": 0.0,
+        "flt_only_with_price": True, "flt_only_with_maturity": True,
     },
     "⚖️ Сбалансированный": {
-        "flt_min_days_maturity": 365,
-        "flt_max_days_maturity": 1825,
-        "flt_max_duration": 3.0,
-        "flt_max_group": 3,
-        "flt_min_credit_quality": 5.0,
-        "flt_max_complexity": 1.0,
-        "flt_only_non_subordinated": True,
-        "flt_min_volume": 1_000_000,
-        "flt_max_spread": 0.5,
-        "flt_min_potential_return": 5.0,
-        "flt_rate_change": -1.0,
-        "flt_only_with_price": True,
-        "flt_only_with_maturity": True,
+        "flt_min_days_maturity": 365, "flt_max_days_maturity": 1825,
+        "flt_max_duration": 3.0, "flt_max_group": 3, "flt_min_credit_quality": 5.0,
+        "flt_max_complexity": 1.0, "flt_only_non_subordinated": True,
+        "flt_min_volume": 1_000_000, "flt_max_spread": 0.5,
+        "flt_min_potential_return": 5.0, "flt_rate_change": -1.0,
+        "flt_only_with_price": True, "flt_only_with_maturity": True,
     },
     "🚀 Агрессивный / высокая доходность": {
-        "flt_min_days_maturity": 180,
-        "flt_max_days_maturity": 3650,
-        "flt_max_duration": 5.0,
-        "flt_max_group": 5,
-        "flt_min_credit_quality": 3.0,
-        "flt_max_complexity": 3.0,
-        "flt_only_non_subordinated": False,
-        "flt_min_volume": 500_000,
-        "flt_max_spread": 1.0,
-        "flt_min_potential_return": 8.0,
-        "flt_rate_change": -2.0,
-        "flt_only_with_price": True,
-        "flt_only_with_maturity": False,
+        "flt_min_days_maturity": 180, "flt_max_days_maturity": 3650,
+        "flt_max_duration": 5.0, "flt_max_group": 5, "flt_min_credit_quality": 3.0,
+        "flt_max_complexity": 3.0, "flt_only_non_subordinated": False,
+        "flt_min_volume": 500_000, "flt_max_spread": 1.0,
+        "flt_min_potential_return": 8.0, "flt_rate_change": -2.0,
+        "flt_only_with_price": True, "flt_only_with_maturity": False,
     },
     "📉 Ставка падает — длинные бумаги": {
-        "flt_max_duration": 5.0,
-        "flt_min_days_maturity": 730,
-        "flt_max_group": 3,
-        "flt_min_potential_return": 5.0,
-        "flt_rate_change": -2.0,
-        "flt_only_with_price": True,
+        "flt_max_duration": 5.0, "flt_min_days_maturity": 730,
+        "flt_max_group": 3, "flt_min_potential_return": 5.0,
+        "flt_rate_change": -2.0, "flt_only_with_price": True,
     },
     "📈 Ставка растёт — короткие бумаги": {
-        "flt_max_duration": 1.0,
-        "flt_max_days_maturity": 730,
-        "flt_max_group": 2,
-        "flt_min_potential_return": 0.0,
-        "flt_rate_change": +2.0,
-        "flt_only_with_price": True,
+        "flt_max_duration": 1.0, "flt_max_days_maturity": 730,
+        "flt_max_group": 2, "flt_min_potential_return": 0.0,
+        "flt_rate_change": +2.0, "flt_only_with_price": True,
     },
 }
 
@@ -125,10 +101,8 @@ EXCEL_COLS = {
     "Название (Доход.ру)", "Тип купона (Доход.ру)",
 }
 
-
 def mark_x(c):
     return f"{c} (X)" if c in EXCEL_COLS else c
-
 
 # ================== ГРУППЫ СТОЛБЦОВ ==================
 GROUP_EMOJI = {
@@ -141,69 +115,42 @@ COL_GROUP_MAP = {
     "SECID": "Идентификация", "ISIN": "Идентификация",
     "Наименование": "Идентификация", "Полное наименование": "Идентификация",
     "Эмитент": "Идентификация", "Основной заемщик": "Идентификация",
-    "Название (Доход.ру)": "Идентификация",
-    "Режим торгов": "Идентификация", "Отрасль": "Идентификация",
-    "Тип эмитента (Доход.ру)": "Идентификация",
-    "Тип ценной бумаги": "Идентификация",
-    "Тип бумаги": "Идентификация",
-    "Высокий риск": "Риск",
-    "Технический дефолт": "Риск",
-    "Цена последней сделки, %": "Рынок",
-    "Средневзвешенная цена, % к номиналу": "Рынок",
+    "Название (Доход.ру)": "Идентификация", "Режим торгов": "Идентификация",
+    "Отрасль": "Идентификация", "Тип эмитента (Доход.ру)": "Идентификация",
+    "Тип ценной бумаги": "Идентификация", "Тип бумаги": "Идентификация",
+    "Высокий риск": "Риск", "Технический дефолт": "Риск",
+    "Цена последней сделки, %": "Рынок", "Средневзвешенная цена, % к номиналу": "Рынок",
     "Цена закрытия, %": "Рынок", "Текущая цена, %": "Рынок",
     "Изменение, % к предыдущей": "Рынок", "Спред, %": "Рынок",
     "Лучшая цена покупки, %": "Рынок", "Лучшая цена продажи, %": "Рынок",
-    "Ставка купона, %": "Купон", "Купон": "Купон",
-    "Годовой купон": "Купон", "Период купона, дней": "Купон",
-    "НКД": "Купон", "Тип купона": "Купон", "Тип номинала": "Купон",
-    "Номинал": "Купон", "Валюта номинала": "Купон",
-    "Размер лота": "Купон", "Объем выпуска, шт.": "Купон",
-    "Грязная цена": "Купон", "Сумма покупки лота": "Купон",
-    "Уровень листинга": "Купон", "Флоатер": "Купон",
-    "Дата погашения": "Сроки", "Дата оферты": "Сроки",
-    "Дата оценки доходности": "Сроки",
-    "Дней до погашения": "Сроки", "Дней до оферты": "Сроки",
-    "Эффективный срок, дней": "Сроки",
-    "Лет до даты (Доход.ру)": "Сроки",
-    "Ближайшая дата, лет": "Сроки",
-    "Событие": "Сроки",
-    "YTM, %": "Доходность", "Чистый YTM, %": "Доходность",
-    "YTC, %": "Доходность", "YTC call, %": "Доходность",
-    "Текущая доходность, %": "Доходность",
-    "Простая доходность, %": "Доходность",
-    "Доходность по средневзвешенной цене": "Доходность",
-    "Доходность по последней сделке": "Доходность",
-    "Доходность к оферте": "Доходность",
-    "Доходность к кол-опциону по срвзв.": "Доходность",
-    "Потенциальная доходность, %": "Доходность",
-    "Прогнозная цена, %": "Доходность",
-    "Дюрация, лет": "Доходность", "Дюрация, дней": "Доходность",
-    "Дюрация к дате колл-опциона": "Доходность",
-    "Дисконт к номиналу, %": "Доходность",
-    "Группа надёжности": "Доходность",
-    "Z-спред по цене последней сделки": "Доходность",
-    "Z-спред по средневзвешенной цене": "Доходность",
-    "Рыночный риск, %": "Доходность",
-    "Кредитное качество": "Кредит", "Кредитный рэнкинг": "Кредит",
-    "Качество эмитента": "Кредит", "Inside Q": "Кредит",
-    "Outside Q": "Кредит", "NetDebt/Equity": "Кредит",
-    "Коэф. ликвидности": "Кредит", "Сложность": "Кредит",
-    "Субординированная": "Кредит", "С гарантией": "Кредит",
-    "Размер выпуска (оценка)": "Кредит",
-    "Объём в обращении, млрд": "Кредит",
-    "Объем в валюте": "Ликвидность", "Объем в бумагах": "Ликвидность",
-    "Количество сделок": "Ликвидность",
-    "Объем на покупку, шт.": "Ликвидность",
-    "Объем на продажу, шт.": "Ликвидность",
-    "Медиана оборота, млн": "Ликвидность",
-    "Ликвидность (комбинир.)": "Ликвидность",
-    "Вмененная плавающая ставка": "Макро",
-    "Вмененная инфляция (BEI)": "Макро",
-    "Вмененная ключевая ставка (CBR)": "Макро",
-    "Состояние сессии": "Макро",
+    "Ставка купона, %": "Купон", "Купон": "Купон", "Годовой купон": "Купон",
+    "Период купона, дней": "Купон", "НКД": "Купон", "Тип купона": "Купон",
+    "Тип номинала": "Купон", "Номинал": "Купон", "Валюта номинала": "Купон",
+    "Размер лота": "Купон", "Объем выпуска, шт.": "Купон", "Грязная цена": "Купон",
+    "Сумма покупки лота": "Купон", "Уровень листинга": "Купон", "Флоатер": "Купон",
+    "Дата погашения": "Сроки", "Дата оферты": "Сроки", "Дата оценки доходности": "Сроки",
+    "Дней до погашения": "Сроки", "Дней до оферты": "Сроки", "Эффективный срок, дней": "Сроки",
+    "Лет до даты (Доход.ру)": "Сроки", "Ближайшая дата, лет": "Сроки", "Событие": "Сроки",
+    "YTM, %": "Доходность", "Чистый YTM, %": "Доходность", "YTC, %": "Доходность",
+    "YTC call, %": "Доходность", "Текущая доходность, %": "Доходность",
+    "Простая доходность, %": "Доходность", "Доходность по средневзвешенной цене": "Доходность",
+    "Доходность по последней сделке": "Доходность", "Доходность к оферте": "Доходность",
+    "Доходность к кол-опциону по срвзв.": "Доходность", "Потенциальная доходность, %": "Доходность",
+    "Прогнозная цена, %": "Доходность", "Дюрация, лет": "Доходность", "Дюрация, дней": "Доходность",
+    "Дюрация к дате колл-опциона": "Доходность", "Дисконт к номиналу, %": "Доходность",
+    "Группа надёжности": "Доходность", "Z-спред по цене последней сделки": "Доходность",
+    "Z-спред по средневзвешенной цене": "Доходность", "Рыночный риск, %": "Доходность",
+    "Кредитное качество": "Кредит", "Кредитный рэнкинг": "Кредит", "Качество эмитента": "Кредит",
+    "Inside Q": "Кредит", "Outside Q": "Кредит", "NetDebt/Equity": "Кредит",
+    "Коэф. ликвидности": "Кредит", "Сложность": "Кредит", "Субординированная": "Кредит",
+    "С гарантией": "Кредит", "Размер выпуска (оценка)": "Кредит", "Объём в обращении, млрд": "Кредит",
+    "Объем в валюте": "Ликвидность", "Объем в бумагах": "Ликвидность", "Количество сделок": "Ликвидность",
+    "Объем на покупку, шт.": "Ликвидность", "Объем на продажу, шт.": "Ликвидность",
+    "Медиана оборота, млн": "Ликвидность", "Ликвидность (комбинир.)": "Ликвидность",
+    "Вмененная плавающая ставка": "Макро", "Вмененная инфляция (BEI)": "Макро",
+    "Вмененная ключевая ставка (CBR)": "Макро", "Состояние сессии": "Макро",
     "Время обновления": "Макро", "Время загрузки": "Макро",
 }
-
 
 def display_name(col):
     group = COL_GROUP_MAP.get(col, "")
@@ -218,10 +165,8 @@ def display_name(col):
                 break
     return f"{emoji} {base}".strip()
 
-
 def display_name_short(col):
     return display_name(col).replace("\n", " ")
-
 
 def base_from_display(disp):
     parts = disp.split(" ", 1)
@@ -234,24 +179,11 @@ def base_from_display(disp):
         base = base[:-4]
     return base.strip()
 
-
 # ================== СПРАВКИ ==================
 HELP = {
     "settlement_date": "**Дата расчёта** — от неё считаются сроки до погашения и оферты.",
-    "forecast_date": (
-        "**Дата прогноза** — к этой дате применяется сдвиг ключевой ставки. "
-        "Срок от даты расчёта до этой даты используется в «Потенциальной "
-        "доходности» (купон учитывается за весь этот срок)."
-    ),
-    "rate_change_pp": (
-        "**Прогноз ставки ЦБ** — на сколько п.п. изменится ключевая ставка "
-        "**к выбранной дате прогноза**.\n\n"
-        "Влияет на «Прогнозную цену», «Потенциальную доходность» и "
-        "«Рыночный риск».\n\n"
-        "• **−1…−2 п.п.** = ставки падают → длинные бумаги выгоднее.\n"
-        "• **+1…+2 п.п.** = ставки растут → короткие безопаснее.\n"
-        "• **0** = нейтрально (для «Рыночного риска» включается стресс-тест)."
-    ),
+    "forecast_date": "**Дата прогноза** — к этой дате применяется сдвиг ключевой ставки. Срок от даты расчёта до этой даты используется в «Потенциальной доходности».",
+    "rate_change_pp": "**Прогноз ставки ЦБ** — на сколько п.п. изменится ключевая ставка **к выбранной дате прогноза**.",
     "ndfl": "**Ставка НДФЛ** — налог на купонный доход. Уменьшает реальную доходность.",
     "cbr_rate": "**Текущая ставка ЦБ** — подтягивается автоматически с сайта Банка России. Можно скорректировать вручную.",
     "uploaded_file": "**Excel Доход.ру (X)** — файл с метриками качества эмитента, которых нет на MOEX.",
@@ -272,11 +204,7 @@ HELP = {
     "max_eff_days": "**Макс. эффективный срок** — отсекает бумаги с далёкой офертой.",
     "only_with_maturity": "**Только с датой погашения** — исключить бессрочные (вечные).",
     "only_with_offer": "**Только с офертой** — бумаги, где можно вернуть номинал.",
-    "min_potential_return": (
-        "**Потенциальная доходность** — сколько заработаете **за срок от даты "
-        "расчёта до даты прогноза**, если прогноз ставки сбудется. Купон "
-        "учитывается за весь этот срок, а не только за один год."
-    ),
+    "min_potential_return": "**Потенциальная доходность** — сколько заработаете **за срок от даты расчёта до даты прогноза**.",
     "only_with_ytm": "**Только с YTM** — бумаги с рассчитанной доходностью к погашению.",
     "min_ytm": "**Мин. YTM** — нижняя граница доходности.",
     "max_ytm": "**Макс. YTM** — выше 30% часто означает риск дефолта.",
@@ -307,15 +235,8 @@ HELP = {
     "reset_btn": "**Сбросить** — вернуть все фильтры к параметрам по умолчанию.",
     "use_colors": "**Красить ячейки** — включить/выключить подсветку.",
     "preset_select": "**Пресет** — готовый набор фильтров под стратегию.",
-    "income_type": (
-        "**Тип доходности** — метрика для сортировки и отображения:\n\n"
-        "• **Эффективная (YTM)** — с реинвестированием купонов.\n"
-        "• **К оферте (YTC)** — если бумага будет выкуплена по оферте.\n"
-        "• **Текущая** — только купон / цена.\n"
-        "• **Простая** — без реинвестирования, с учётом дисконта."
-    ),
+    "income_type": "**Тип доходности** — метрика для сортировки и отображения.",
 }
-
 
 # ================== КЕШ EXCEL ==================
 CACHE_DIR = Path.home() / ".moex_bond_screener"
@@ -327,10 +248,8 @@ except Exception:
 DOHOD_FILE = CACHE_DIR / "dohod_latest.xlsx"
 DOHOD_META = CACHE_DIR / "dohod_meta.json"
 
-
 def _file_hash(b):
     return hashlib.md5(b).hexdigest()
-
 
 def save_dohod_bytes(data, source="upload"):
     try:
@@ -343,7 +262,6 @@ def save_dohod_bytes(data, source="upload"):
     except Exception:
         pass
 
-
 def load_cached_dohod_bytes():
     if DOHOD_FILE.exists():
         try:
@@ -351,7 +269,6 @@ def load_cached_dohod_bytes():
         except Exception:
             return None
     return None
-
 
 def get_dohod_cache_age_days():
     if not DOHOD_META.exists():
@@ -363,7 +280,6 @@ def get_dohod_cache_age_days():
     except Exception:
         return None
 
-
 def clear_dohod_cache():
     for p in (DOHOD_FILE, DOHOD_META):
         try:
@@ -372,58 +288,29 @@ def clear_dohod_cache():
         except Exception:
             pass
 
-
 # ================== ОТРАСЛЬ ==================
 INDUSTRY_KEYWORDS = {
-    "Банк": ["банк", "сбербанк", "втб", "газпромбанк", "альфа-банк",
-             "россельхозбанк", "открытие", "псб", "мкб", "совкомбанк",
-             "росбанк", "тинькофф", "тбанк", "мтс-банк", "экспобанк",
-             "центр-инвест", "авто финанс", "росэксимбанк", "мсп банк", "вэб"],
-    "Нефтегаз": ["газпром", "роснефть", "лукойл", "новатэк", "татнефть",
-                 "башнефть", "сургутнефтегаз", "славнефть", "нефтегаз",
-                 "транснефть", "газпром нефть", "газпром капитал", "нк "],
-    "Металлургия": ["металлоинвест", "норильск", "русал", "северсталь",
-                    "ммк", "тмк", "омк", "евраз", "селигдар", "полюс",
-                    "алроса", "полиметалл", "уральская сталь", "кокс"],
-    "Энергетика": ["россети", "фск", "интер рао", "русгидро", "лэнэнерго",
-                   "мособлэнерго", "тгк", "огк", "энерг", "т плюс", "мозэс",
-                   "мрск", "мосэнергосбыт", "тгк-1", "тгк-14"],
-    "Телеком": ["мтс", "ростелеком", "мегафон", "билайн", "вымпелком",
-                "телеком", "мтт", "эр-телеком"],
-    "Лизинг": ["лизинг", "втб лиз", "газтехлизинг", "гтлк", "европлан",
-               "совкомбанк лизинг", "балтийский лизинг", "интерлизинг",
-               "экономлизинг", "ресо-лизинг", "практика лк", "рольф",
-               "контрол лизинг", "мсб-лизинг", "техно лизинг"],
-    "Девелопмент": ["пик", "лср", "самолет", "эталон", "а101", "брусника",
-                    "ингр", "лидер", "донстрой", "пионер",
-                    "апри", "аквилон", "легенда", "сэтл"],
-    "Ритейл": ["магнит", "х5", "пятерочка", "лента", "о'кей", "детский мир",
-               "м.видео", "мвидео", "м видео", "окей"],
-    "Химия": ["акрон", "фосагро", "еврохим", "нижнекамскнефтехим", "сибур",
-              "куйбышевазот", "полипласт", "азот", "агроэко"],
-    "Транспорт": ["ржд", "аэрофлот", "трансконтейнер", "нмтп", "фпк",
-                  "совкомфлот", "гтлк", "первая грузовая", "пгк",
-                  "новотранс", "евротранс", "сегежа", "делпортс",
-                  "флот", "флит"],
-    "МФО / коллекторы": ["мфк", "мфо", "лайм-займ", "мани мен", "быстроденьги",
-                         "займ", "деньги", "пко", "коллект", "джой мани",
-                         "фордевинд", "мани капитал", "веббанкир",
-                         "смартфакт", "мгкл", "пкб", "айди коллект", "сза"],
-    "Госсектор": ["минфин", "правительство", "администрация", "департамент",
-                  "город", "область", "край", "республика", "мосфин", "мэф"],
+    "Банк": ["банк", "сбербанк", "втб", "газпромбанк", "альфа-банк", "россельхозбанк", "открытие", "псб", "мкб", "совкомбанк", "росбанк", "тинькофф", "тбанк", "мтс-банк", "экспобанк", "центр-инвест", "авто финанс", "росэксимбанк", "мсп банк", "вэб"],
+    "Нефтегаз": ["газпром", "роснефть", "лукойл", "новатэк", "татнефть", "башнефть", "сургутнефтегаз", "славнефть", "нефтегаз", "транснефть", "газпром нефть", "газпром капитал", "нк "],
+    "Металлургия": ["металлоинвест", "норильск", "русал", "северсталь", "ммк", "тмк", "омк", "евраз", "селигдар", "полюс", "алроса", "полиметалл", "уральская сталь", "кокс"],
+    "Энергетика": ["россети", "фск", "интер рао", "русгидро", "лэнэнерго", "мособлэнерго", "тгк", "огк", "энерг", "т плюс", "мозэс", "мрск", "мосэнергосбыт", "тгк-1", "тгк-14"],
+    "Телеком": ["мтс", "ростелеком", "мегафон", "билайн", "вымпелком", "телеком", "мтт", "эр-телеком"],
+    "Лизинг": ["лизинг", "втб лиз", "газтехлизинг", "гтлк", "европлан", "совкомбанк лизинг", "балтийский лизинг", "интерлизинг", "экономлизинг", "ресо-лизинг", "практика лк", "рольф", "контрол лизинг", "мсб-лизинг", "техно лизинг"],
+    "Девелопмент": ["пик", "лср", "самолет", "эталон", "а101", "брусника", "ингр", "лидер", "донстрой", "пионер", "апри", "аквилон", "легенда", "сэтл"],
+    "Ритейл": ["магнит", "х5", "пятерочка", "лента", "о'кей", "детский мир", "м.видео", "мвидео", "м видео", "окей"],
+    "Химия": ["акрон", "фосагро", "еврохим", "нижнекамскнефтехим", "сибур", "куйбышевазот", "полипласт", "азот", "агроэко"],
+    "Транспорт": ["ржд", "аэрофлот", "трансконтейнер", "нмтп", "фпк", "совкомфлот", "гтлк", "первая грузовая", "пгк", "новотранс", "евротранс", "сегежа", "делпортс", "флот", "флит"],
+    "МФО / коллекторы": ["мфк", "мфо", "лайм-займ", "мани мен", "быстроденьги", "займ", "деньги", "пко", "коллект", "джой мани", "фордевинд", "мани капитал", "веббанкир", "смартфакт", "мгкл", "пкб", "айди коллект", "сза"],
+    "Госсектор": ["минфин", "правительство", "администрация", "департамент", "город", "область", "край", "республика", "мосфин", "мэф"],
     "Строительство": ["строй", "стройтрест", "мостоотряд"],
-    "АПК": ["агро", "зерно", "экон", "русагро", "черкизово", "мироторг",
-            "русское море", "интарсия", "агроком", "биотех"],
+    "АПК": ["агро", "зерно", "экон", "русагро", "черкизово", "мироторг", "русское море", "интарсия", "агроком", "биотех"],
     "Золото": ["gold", "полюс", "селигдар", "selgold"],
-    "Ипотечные агенты": ["иа дом", "иадом", "дом.рф", "ипотечный агент",
-                          "сфо", "mortgage"],
+    "Ипотечные агенты": ["иа дом", "иадом", "дом.рф", "ипотечный агент", "сфо", "mortgage"],
 }
-
 
 def determine_industry_vectorized(df):
     text_parts = []
-    for col in ("Эмитент", "Наименование", "Основной заемщик",
-                "Название (Доход.ру)", "Полное наименование"):
+    for col in ("Эмитент", "Наименование", "Основной заемщик", "Название (Доход.ру)", "Полное наименование"):
         if col in df.columns:
             text_parts.append(df[col].fillna("").astype(str))
     if not text_parts:
@@ -438,7 +325,6 @@ def determine_industry_vectorized(df):
         mask = text.str.contains(pattern, regex=True, na=False) & (result == "Прочее")
         result[mask] = industry
     return result
-
 
 # ================== РЕЖИМЫ ТОРГОВ ==================
 BOARD_INFO = {
@@ -455,39 +341,30 @@ BOARD_INFO = {
     "TQUD": {"label": "С ЦК", "settle": "Т+1", "currency": "₽", "for": "Обычным"},
 }
 
-
 def board_label(code):
     info = BOARD_INFO.get(code)
     if info:
         return f"{info['label']} ({code}) · {info['currency']} · {info['settle']}"
     return code
 
-
 # ================== ПАРСЕР EXCEL ==================
 DOHOD_RENAME = {
-    "ISIN": "ISIN", "Название": "Название (Доход.ру)",
-    "Эмитент": "Эмитент", "Основной заемщик": "Основной заемщик",
-    "Объем выпуска в обращении, млрд": "Объём в обращении, млрд",
-    "Лет до даты": "Лет до даты (Доход.ру)",
-    "Кредитное качество (число, max=10)": "Кредитное качество",
-    "Кредитное качество (рэнкинг)": "Кредитный рэнкинг",
-    "Качество эмитента (max=10)": "Качество эмитента",
+    "ISIN": "ISIN", "Название": "Название (Доход.ру)", "Эмитент": "Эмитент",
+    "Основной заемщик": "Основной заемщик", "Объем выпуска в обращении, млрд": "Объём в обращении, млрд",
+    "Лет до даты": "Лет до даты (Доход.ру)", "Кредитное качество (число, max=10)": "Кредитное качество",
+    "Кредитное качество (рэнкинг)": "Кредитный рэнкинг", "Качество эмитента (max=10)": "Качество эмитента",
     "Inside Q (max=10)": "Inside Q", "Outside Q (max=10)": "Outside Q",
-    "NetDebt/Equity (рейтинг) (max=10)": "NetDebt/Equity",
-    "Коэф. Ликвидности (max=100)": "Коэф. ликвидности",
-    "Медиана дневного оборота (млн в валюте торгов)": "Медиана оборота, млн",
-    "Сложность (max=5)": "Сложность", "Размер (max=10)": "Размер выпуска (оценка)",
-    "Тип купона": "Тип купона (Доход.ру)", "Тип эмитента": "Тип эмитента (Доход.ру)",
-    "Субординированная (да/нет)": "Субординированная",
+    "NetDebt/Equity (рейтинг) (max=10)": "NetDebt/Equity", "Коэф. Ликвидности (max=100)": "Коэф. ликвидности",
+    "Медиана дневного оборота (млн в валюте торгов)": "Медиана оборота, млн", "Сложность (max=5)": "Сложность",
+    "Размер (max=10)": "Размер выпуска (оценка)", "Тип купона": "Тип купона (Доход.ру)",
+    "Тип эмитента": "Тип эмитента (Доход.ру)", "Субординированная (да/нет)": "Субординированная",
     "С гарантией (да/нет)": "С гарантией", "Отрасль": "Отрасль",
 }
-
 
 def _to_bytesio(x):
     if isinstance(x, (bytes, bytearray)):
         return io.BytesIO(x)
     return x
-
 
 def parse_dohod_file(uploaded):
     try:
@@ -498,15 +375,11 @@ def parse_dohod_file(uploaded):
     if "ISIN" not in raw.columns:
         return pd.DataFrame(), "В файле нет столбца ISIN"
     renamed = raw.rename(columns={k: v for k, v in DOHOD_RENAME.items() if k in raw.columns})
-    keep = ["ISIN"] + [v for v in DOHOD_RENAME.values()
-                       if v in renamed.columns and v != "ISIN"]
+    keep = ["ISIN"] + [v for v in DOHOD_RENAME.values() if v in renamed.columns and v != "ISIN"]
     renamed = renamed[keep].copy()
     renamed["ISIN"] = renamed["ISIN"].astype(str).str.strip()
     renamed = renamed.drop_duplicates(subset=["ISIN"], keep="first")
-    num_cols = ["Кредитное качество", "Качество эмитента", "Inside Q", "Outside Q",
-                "NetDebt/Equity", "Коэф. ликвидности", "Сложность",
-                "Размер выпуска (оценка)", "Лет до даты (Доход.ру)",
-                "Объём в обращении, млрд", "Медиана оборота, млн"]
+    num_cols = ["Кредитное качество", "Качество эмитента", "Inside Q", "Outside Q", "NetDebt/Equity", "Коэф. ликвидности", "Сложность", "Размер выпуска (оценка)", "Лет до даты (Доход.ру)", "Объём в обращении, млрд", "Медиана оборота, млн"]
     for c in num_cols:
         if c in renamed.columns:
             renamed[c] = pd.to_numeric(renamed[c], errors="coerce")
@@ -514,11 +387,9 @@ def parse_dohod_file(uploaded):
         renamed["Отрасль"] = determine_industry_vectorized(renamed)
     return renamed, None
 
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def parse_dohod_cached(file_bytes: bytes):
     return parse_dohod_file(io.BytesIO(file_bytes))
-
 
 # ================== СПРАВКА ПО СТОЛБЦАМ ==================
 COLUMN_HELP = {
@@ -588,10 +459,7 @@ COLUMN_HELP = {
     "Группа надёжности": "Агрегированный показатель кредитного риска (1–6).",
     "Z-спред по цене последней сделки": "Премия к безрисковой кривой, б.п.",
     "Z-спред по средневзвешенной цене": "Z-спред по WAP.",
-    "Рыночный риск, %": (
-        "На сколько % изменится цена при изменении ставок на ваш прогноз (±п.п.).\n\n"
-        "Формула: −Дюрация × Δставки. Если прогноз = 0 — стресс-тест: +2 п.п. (RUB), +1 п.п. (валюта)."
-    ),
+    "Рыночный риск, %": "На сколько % изменится цена при изменении ставок на ваш прогноз (±п.п.).",
     "Кредитное качество": "Оценка эмитента от 0 до 10 (X).",
     "Кредитный рэнкинг": "Буквенная оценка (X).",
     "Качество эмитента": "Устойчивость бизнес-модели от 1 до 10 (X).",
@@ -620,16 +488,10 @@ COLUMN_HELP = {
 }
 
 DATE_COLS = {"Дата погашения", "Дата оферты", "Дата оценки доходности"}
-INT_COLS = {"Количество сделок", "Объем в бумагах", "Размер лота",
-            "Объем выпуска, шт.", "Уровень листинга", "Дней до погашения",
-            "Дней до оферты", "Период купона, дней", "Эффективный срок, дней",
-            "Группа надёжности"}
-
-
+INT_COLS = {"Количество сделок", "Объем в бумагах", "Размер лота", "Объем выпуска, шт.", "Уровень листинга", "Дней до погашения", "Дней до оферты", "Период купона, дней", "Эффективный срок, дней", "Группа надёжности"}
 # ================== HTML-РЕНДЕР ==================
 _COLOR_BG = {"green": "#c6efce", "yellow": "#ffeb9c", "red": "#ffc7ce"}
 _COLOR_FG = {"green": "#006100", "yellow": "#9c6500", "red": "#9c0006"}
-
 
 def _fmt_cell(val, base_col):
     if pd.isna(val):
@@ -647,7 +509,6 @@ def _fmt_cell(val, base_col):
     if isinstance(val, (int, float, np.integer, np.floating)):
         return f"{val:.2f}"
     return _html.escape(str(val))
-
 
 def render_html_table(df, tags, display_cols_map):
     headers = [display_cols_map[c] for c in df.columns]
@@ -691,7 +552,6 @@ def render_html_table(df, tags, display_cols_map):
         parts.append("</tr>")
     parts.append("</tbody></table></div>")
     return "".join(parts)
-
 
 # ================== ГРУППЫ ДЛЯ UI ==================
 COLUMN_GROUPS = {
@@ -759,7 +619,6 @@ DEFAULT_VISIBLE_COLS = {
     "Ликвидность (комбинир.)",
 }
 
-
 # ================== ЦВЕТА ==================
 COLOR_CSS = {
     "green": "background-color: #c6efce; color: #006100;",
@@ -767,13 +626,11 @@ COLOR_CSS = {
     "red": "background-color: #ffc7ce; color: #9c0006;",
 }
 
-
 def _is_rub_series(df):
     if "Валюта номинала" not in df.columns:
         return pd.Series(False, index=df.index)
     cur = df["Валюта номинала"].astype(str).str.strip().str.upper()
     return cur.isin(RUB_CURRENCIES)
-
 
 def compute_color_tags(df, cbr_rate, max_duration):
     tags = pd.DataFrame("", index=df.index, columns=df.columns)
@@ -902,7 +759,6 @@ def compute_color_tags(df, cbr_rate, max_duration):
 
     return tags
 
-
 # ================== ЗАГРУЗЧИКИ ==================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_securities_page(start, page_size=PAGE_SIZE):
@@ -920,7 +776,6 @@ def fetch_securities_page(start, page_size=PAGE_SIZE):
     if not rows:
         return pd.DataFrame(columns=cols), None
     return pd.DataFrame(rows, columns=cols), None
-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_marketdata_page(board, start, page_size=PAGE_SIZE):
@@ -941,7 +796,6 @@ def fetch_marketdata_page(board, start, page_size=PAGE_SIZE):
     if "BOARDID" not in df.columns:
         df["BOARDID"] = board
     return df, None
-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_securities_cached():
@@ -970,7 +824,6 @@ def _load_securities_cached():
         df = df.drop_duplicates(subset=["SECID", "BOARDID"])
     return df, stop_reason
 
-
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_marketdata_cached(board):
     frames, seen = [], set()
@@ -998,20 +851,16 @@ def _load_marketdata_cached(board):
         df = df.drop_duplicates(subset=["SECID", "BOARDID"])
     return df, stop_reason
 
-
 def load_securities():
     with st.spinner("Загрузка securities..."):
         df, why = _load_securities_cached()
     return df, why
 
-
 def load_marketdata_for_board(board):
     with st.spinner(f"Загрузка marketdata: {board}..."):
         df, why = _load_marketdata_cached(board)
     return df, why
-
-
-# ================== МЕТРИКИ ==================
+  # ================== МЕТРИКИ ==================
 def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
     df = df.copy()
 
@@ -1098,10 +947,9 @@ def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
     else:
         df["Простая доходность, %"] = np.nan
 
-    # срок до даты прогноза в годах
     T = (pd.Timestamp(forecast_date) - pd.Timestamp(settlement_date)).days / 365.0
     if T <= 0:
-        T = 1.0 / 365.0   # защита от нулевого/отрицательного срока
+        T = 1.0 / 365.0
 
     if (price_col and "Дюрация, лет" in df.columns
             and "Годовой купон" in df.columns
@@ -1188,7 +1036,6 @@ def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
 
     df["Тип бумаги"] = df.apply(_bond_type, axis=1)
 
-    # --- ДОБАВЛЯЕМ СТОЛБЕЦ "Флоатер" ---
     if "Тип купона" in df.columns:
         floater_mask = df["Тип купона"].astype(str).str.lower().str.contains(
             "плавающ|перемен|формул", na=False
@@ -1199,7 +1046,6 @@ def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
 
     return df
 
-
 # ================== ФИЛЬТРЫ ==================
 def keep(f, col, mask, keep_na):
     if col not in f.columns:
@@ -1208,9 +1054,7 @@ def keep(f, col, mask, keep_na):
         return f[f[col].isna() | mask]
     return f[mask]
 
-
 _SUBORD_YES = {"да", "yes", "true", "1", "+"}
-
 
 def apply_filters(f, o):
     keep_na = o["keep_na"]
@@ -1344,7 +1188,6 @@ def apply_filters(f, o):
 
     return f
 
-
 def apply_color_filter(res_df, tags_df, selected_colors):
     if not selected_colors:
         return res_df.iloc[0:0], tags_df.iloc[0:0]
@@ -1358,7 +1201,6 @@ def apply_color_filter(res_df, tags_df, selected_colors):
     if "uncolored" in selected_colors:
         match = match | (tags_df == "").all(axis=1)
     return res_df[match], tags_df[match]
-
 
 # ================== ВИДЖЕТЫ С КНОПКАМИ «−» / «+» ==================
 def float_slider_with_input(label_display, min_v, max_v, default, step, key,
@@ -1424,7 +1266,6 @@ def float_slider_with_input(label_display, min_v, max_v, default, step, key,
                   use_container_width=True)
     return float(st.session_state[slider_key])
 
-
 def int_slider_with_input(label_display, min_v, max_v, default, step, key,
                           help_text="", is_excel=False, hint=""):
     slider_key = f"{key}_slider"
@@ -1488,23 +1329,19 @@ def int_slider_with_input(label_display, min_v, max_v, default, step, key,
                   use_container_width=True)
     return int(st.session_state[slider_key])
 
-
 # ================== СБРОС / ПРЕСЕТЫ ==================
 def reset_all_filters():
     for k in list(st.session_state.keys()):
         if k.startswith("flt_") or k.startswith("colsel_") or k.startswith("view_"):
             del st.session_state[k]
 
-
 def reset_button_callback():
     reset_all_filters()
     st.toast("Фильтры сброшены к параметрам стратегии", icon="✅")
 
-
 def clear_cache_callback():
     clear_dohod_cache()
     st.toast("Кеш Доход.ру удалён", icon="🗑️")
-
 
 def apply_preset(preset_name):
     if preset_name not in PRESETS:
@@ -1514,7 +1351,6 @@ def apply_preset(preset_name):
         st.session_state[f"{k}_slider"] = v
         st.session_state[f"{k}_num"] = v
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
-
 
 # ================== АВТОСТАВКА ЦБ РФ ==================
 CBR_KEY_RATE_URL = "https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx"
@@ -1531,10 +1367,8 @@ CBR_KEY_RATE_SOAP = """<?xml version="1.0" encoding="utf-8"?>
   </soap:Body>
 </soap:Envelope>"""
 
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def auto_cbr_rate() -> float:
-    """Возвращает последнюю известную ключевую ставку ЦБ РФ (в %)."""
     date_to = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
     soap = CBR_KEY_RATE_SOAP.format(from_date=date_from, to_date=date_to)
@@ -1574,11 +1408,9 @@ def auto_cbr_rate() -> float:
         )
         return 0.0
 
-
 # ================== RGBI (MOEX ISS) ==================
 RGBI_HIST_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
 RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/RGBI.json"
-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
@@ -1592,7 +1424,7 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
     frames = []
     start = 0
     page_size = 100
-    max_pages = 50   # 50 × 100 = 5000 баров, с запасом на 5 лет (~1250 торговых дней)
+    max_pages = 50   # 50 × 100 = 5000 баров
 
     for _ in range(max_pages):
         params = {**base_params, "start": start, "limit": page_size}
@@ -1644,15 +1476,12 @@ def fetch_rgbi_current() -> dict | None:
             return None
         row = df.iloc[0]
 
-        # MOEX отдаёт данные в полях OPEN/HIGH/LOW/LAST; UPDATE_TIME — время
         o = pd.to_numeric(row.get("OPEN"), errors="coerce")
         h = pd.to_numeric(row.get("HIGH"), errors="coerce")
         l = pd.to_numeric(row.get("LOW"), errors="coerce")
         c = pd.to_numeric(row.get("LAST"), errors="coerce")
-        # Если LAST нет — берём текущую цену как CLOSE
         if pd.isna(c):
             c = pd.to_numeric(row.get("CURRENTVALUE"), errors="coerce")
-        # Если OPEN нет — берём CLOSE как OPEN (рынок только открылся)
         if pd.isna(o):
             o = c
         if pd.isna(h):
@@ -1663,19 +1492,15 @@ def fetch_rgbi_current() -> dict | None:
         if pd.isna(c) or pd.isna(o) or pd.isna(h) or pd.isna(l):
             return None
 
-        # Дата бара — сегодня
         return {
             "TRADEDATE": pd.Timestamp(date.today()),
-            "OPEN": float(o),
-            "HIGH": float(h),
-            "LOW": float(l),
-            "CLOSE": float(c),
+            "OPEN": float(o), "HIGH": float(h),
+            "LOW": float(l), "CLOSE": float(c),
         }
     except Exception:
         return None
 
-
-def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
+def resample_weekly(df: pd.DataFrame, weeks: int = WEEKLY_BARS) -> pd.DataFrame:
     if df.empty:
         return df
     df_idx = df.set_index("TRADEDATE")
@@ -1684,7 +1509,6 @@ def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
         "LOW": "min", "CLOSE": "last"
     }).dropna().reset_index()
     return res.tail(weeks).reset_index(drop=True)
-
 
 def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.Figure:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -1740,15 +1564,14 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
         showlegend=False,
     )
     return fig
-
-# ================== ИНТЕРФЕЙС ==================
+      # ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
 st.title("📊 Скринер облигаций QCKSLVR TRADING")
 st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/qckslvrtrading)")
 st.caption("Столбцы и фильтры из Excel Доход.ру помечены «(X)». "
            "Клик по SECID открывает карточку на analytics.dohod.ru.")
 
-# ================== ГРАФИКИ RGBI (над параметрами стратегии) ==================
+# ================== ГРАФИКИ RGBI ==================
 with st.spinner("Загрузка истории RGBI..."):
     rgbi_daily = fetch_rgbi_daily(
         from_date=date.today() - timedelta(days=365 * 5 + 30),
@@ -1771,43 +1594,50 @@ if curr_rgbi and not rgbi_daily.empty:
         current_added = True
 
 if not rgbi_daily.empty:
-    rgbi_weekly = resample_weekly(rgbi_daily, weeks=260)
-    rgbi_daily_3y = rgbi_daily.tail(1095).reset_index(drop=True)
+    rgbi_weekly = resample_weekly(rgbi_daily, weeks=WEEKLY_BARS)
+    rgbi_daily_short = rgbi_daily.tail(DAILY_BARS).reset_index(drop=True)
 
     col_w, col_d = st.columns(2)
     with col_w:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_weekly, "RGBI — недельный таймфрейм (260 баров)", is_daily=False),
+            make_rgbi_chart(
+                rgbi_weekly,
+                f"RGBI — недельный таймфрейм ({len(rgbi_weekly)} баров, ~{len(rgbi_weekly)/52:.1f} г.)",
+                is_daily=False,
+            ),
             use_container_width=True,
         )
         st.caption(
-            f"Баров: **{len(rgbi_weekly)}** · "
-            f"с {rgbi_weekly['TRADEDATE'].iloc[0]:%d.%m.%Y} "
-            f"по {rgbi_weekly['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
+            f"Показано: **{len(rgbi_weekly)}** недель · "
+            f"{rgbi_weekly['TRADEDATE'].iloc[0]:%d.%m.%Y} → "
+            f"{rgbi_weekly['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
         )
     with col_d:
         st.plotly_chart(
-            make_rgbi_chart(rgbi_daily_3y, "RGBI — дневной таймфрейм (1095 баров)", is_daily=True),
+            make_rgbi_chart(
+                rgbi_daily_short,
+                f"RGBI — дневной таймфрейм ({len(rgbi_daily_short)} баров, ~{len(rgbi_daily_short)/260:.1f} г.)",
+                is_daily=True,
+            ),
             use_container_width=True,
         )
         st.caption(
-            f"Баров: **{len(rgbi_daily_3y)}** · "
-            f"с {rgbi_daily_3y['TRADEDATE'].iloc[0]:%d.%m.%Y} "
-            f"по {rgbi_daily_3y['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
+            f"Показано: **{len(rgbi_daily_short)}** дней · "
+            f"{rgbi_daily_short['TRADEDATE'].iloc[0]:%d.%m.%Y} → "
+            f"{rgbi_daily_short['TRADEDATE'].iloc[-1]:%d.%m.%Y}"
         )
 
     if current_added:
         st.success(f"✅ Текущий бар от {date.today():%d.%m.%Y} включён в графики.")
     else:
         st.info(
-            f"ℹ️ Текущий бар не получен (URL: `SNDX`). "
-            f"Последний доступный бар: "
+            f"ℹ️ Текущий бар не получен. Последний доступный бар: "
             f"**{rgbi_daily['TRADEDATE'].iloc[-1]:%d.%m.%Y}**."
         )
 else:
     st.warning("⚠️ Не удалось загрузить историю RGBI с MOEX ISS.")
 
-# ================== СЦЕНАРИИ РЫНКА (под графиками RGBI) ==================
+# ================== СЦЕНАРИИ РЫНКА ==================
 st.markdown("#### 🧭 Сценарии рынка (на основе динамики RGBI)")
 scen_col1, scen_col2 = st.columns(2)
 
@@ -2144,7 +1974,6 @@ industry_options = (sorted(df["Отрасль"].dropna().astype(str).unique().to
 bond_type_options = (sorted(df["Тип бумаги"].dropna().astype(str).unique().tolist())
                      if "Тип бумаги" in df.columns else [])
 
-
 def checkbox_group(options, key_prefix, default_selected, n_cols=2):
     selected = []
     cols = st.columns(n_cols)
@@ -2155,7 +1984,6 @@ def checkbox_group(options, key_prefix, default_selected, n_cols=2):
         if checked:
             selected.append(opt)
     return selected
-
 
 # ================== ФИЛЬТРЫ ПОД СТРАТЕГИЮ ==================
 with st.expander("🎯 Фильтры под стратегию", expanded=True):
