@@ -1577,11 +1577,12 @@ def auto_cbr_rate() -> float:
 
 # ================== RGBI (MOEX ISS) ==================
 RGBI_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
+RGBI_CURRENT_URL = f"{BASE_URL}/engines/stock/markets/index/securities/RGBI.json"
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
-    """Дневные бары RGBI с MOEX ISS."""
+    """Дневные бары RGBI с MOEX ISS (история)."""
     params = {
         "iss.meta": "off",
         "from": from_date.strftime("%Y-%m-%d"),
@@ -1606,6 +1607,40 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
     for c in ("OPEN", "HIGH", "LOW", "CLOSE"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df.dropna(subset=["CLOSE"]).sort_values("TRADEDATE").reset_index(drop=True)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_rgbi_current() -> dict | None:
+    """Текущий (сегодняшний) бар RGBI из marketdata."""
+    params = {"iss.meta": "off", "iss.only": "marketdata"}
+    try:
+        r = requests.get(RGBI_CURRENT_URL, params=params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        j = r.json()
+        block = j.get("marketdata", {})
+        rows = block.get("data", [])
+        cols = block.get("columns", [])
+        if not rows:
+            return None
+        df = pd.DataFrame(rows, columns=cols)
+        if df.empty:
+            return None
+        row = df.iloc[0]
+        o = row.get("OPEN")
+        h = row.get("HIGH")
+        l = row.get("LOW")
+        c = row.get("LAST")
+        sys_time = row.get("SYSTIME", "")
+        if pd.notna(c) and pd.notna(o) and pd.notna(h) and pd.notna(l):
+            trade_date = pd.to_datetime(sys_time[:10]) if sys_time else pd.Timestamp(date.today())
+            if trade_date.date() == date.today():
+                return {
+                    "TRADEDATE": trade_date,
+                    "OPEN": o, "HIGH": h, "LOW": l, "CLOSE": c
+                }
+    except Exception:
+        pass
+    return None
 
 
 def resample_weekly(df: pd.DataFrame, weeks: int = 260) -> pd.DataFrame:
@@ -1723,6 +1758,19 @@ with st.spinner("Загрузка истории RGBI..."):
         from_date=date.today() - timedelta(days=365 * 5 + 30),
         till_date=date.today(),
     )
+    
+    # Добавляем текущий бар, если он есть и его нет в истории
+    curr_rgbi = fetch_rgbi_current()
+    if curr_rgbi and not rgbi_daily.empty:
+        last_date = rgbi_daily["TRADEDATE"].iloc[-1].date()
+        curr_date = curr_rgbi["TRADEDATE"].date()
+        if last_date < curr_date:
+            rgbi_daily = pd.concat([rgbi_daily, pd.DataFrame([curr_rgbi])], ignore_index=True)
+        elif last_date == curr_date:
+            # Обновляем последнюю строку, чтобы использовать самые свежие данные
+            rgbi_daily.loc[rgbi_daily.index[-1], ["OPEN", "HIGH", "LOW", "CLOSE"]] = [
+                curr_rgbi["OPEN"], curr_rgbi["HIGH"], curr_rgbi["LOW"], curr_rgbi["CLOSE"]
+            ]
 
 if not rgbi_daily.empty:
     rgbi_weekly = resample_weekly(rgbi_daily, weeks=260)
