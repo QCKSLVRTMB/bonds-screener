@@ -1,9 +1,9 @@
-streamlit>=1.44
+streamlit>=1.40
 pandas>=2.3
 numpy>=2.1
 requests>=2.32
 urllib3>=2.2
-pyarrow>=17.0        # быстрый Arrow-путь для st.dataframe
 openpyxl>=3.1
 xlrd>=2.0
 plotly>=5.24
+pyarrow>=17.0
