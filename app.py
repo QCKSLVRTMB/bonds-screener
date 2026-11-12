@@ -6,17 +6,18 @@ import io
 import json
 import hashlib
 import html as _html
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import date, datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from concurrent.futures import ThreadPoolExecutor
 
 # ================== НАСТРОЙКИ ==================
 BASE_URL = "https://iss.moex.com/iss"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 DEFAULT_DATE = date(2026, 10, 21)
 DEFAULT_FORECAST_DATE = date(2027, 10, 21)
+DEFAULT_EXTREMUM_DATE = date(2026, 7, 20) # Дата экстремума по умолчанию
 DEFAULT_NDFL = 13.0
 DEFAULT_RATE_FORECAST = 0.0
 DEFAULT_MAX_DURATION = 10.0
@@ -107,35 +108,21 @@ def mark_x(c):
 
 
 # ================== РЕШЕНИЯ ЦБ РФ ПО КЛЮЧЕВОЙ СТАВКЕ ==================
-# Формат: (дата, ставка_после_решения, изменение_в_б.п.)
-# Изменение: отрицательное = снижение, положительное = повышение, 0 = сохранение
 CBR_DECISIONS = [
     # 2024 год
-    (date(2024, 7, 26), 18.00, +200),
-    (date(2024, 9, 13), 19.00, +100),
-    (date(2024, 10, 25), 21.00, +200),
-    (date(2024, 12, 20), 21.00, 0),
+    (date(2024, 7, 26), 18.00, +200), (date(2024, 9, 13), 19.00, +100),
+    (date(2024, 10, 25), 21.00, +200), (date(2024, 12, 20), 21.00, 0),
     # 2025 год
-    (date(2025, 2, 14), 21.00, 0),
-    (date(2025, 3, 21), 21.00, 0),
-    (date(2025, 4, 25), 21.00, 0),
-    (date(2025, 6, 6), 20.00, -100),
-    (date(2025, 7, 25), 18.00, -200),
-    (date(2025, 9, 12), 17.00, -100),
-    (date(2025, 10, 24), 16.50, -50),
-    (date(2025, 12, 19), 16.00, -50),
+    (date(2025, 2, 14), 21.00, 0), (date(2025, 3, 21), 21.00, 0),
+    (date(2025, 4, 25), 21.00, 0), (date(2025, 6, 6), 20.00, -100),
+    (date(2025, 7, 25), 18.00, -200), (date(2025, 9, 12), 17.00, -100),
+    (date(2025, 10, 24), 16.50, -50), (date(2025, 12, 19), 16.00, -50),
     # 2026 год
-    (date(2026, 2, 13), 15.50, -50),
-    (date(2026, 3, 20), 15.00, -50),
-    (date(2026, 4, 24), 14.50, -50),
-    (date(2026, 6, 19), 14.25, -25),
-    (date(2026, 7, 24), 14.00, -25),
-    (date(2026, 9, 11), 14.00, 0),
-    (date(2026, 10, 23), 14.00, 0),
-    # Будущие заседания (решения пока неизвестны)
-    (date(2026, 12, 18), None, None),
+    (date(2026, 2, 13), 15.50, -50), (date(2026, 3, 20), 15.00, -50),
+    (date(2026, 4, 24), 14.50, -50), (date(2026, 6, 19), 14.25, -25),
+    (date(2026, 7, 24), 14.00, -25), (date(2026, 9, 11), 14.00, 0),
+    (date(2026, 10, 23), 14.00, 0), (date(2026, 12, 18), None, None),
 ]
-
 
 # ================== ГРУППЫ СТОЛБЦОВ ==================
 GROUP_EMOJI = {
@@ -173,6 +160,7 @@ COL_GROUP_MAP = {
     "Дюрация к дате колл-опциона": "Доходность", "Дисконт к номиналу, %": "Доходность",
     "Группа надёжности": "Доходность", "Z-спред по цене последней сделки": "Доходность",
     "Z-спред по средневзвешенной цене": "Доходность", "Рыночный риск, %": "Доходность",
+    "Сила актива (Δ%)": "Доходность", # ДОБАВЛЕН СТОЛБЕЦ
     "Кредитное качество": "Кредит", "Кредитный рэнкинг": "Кредит", "Качество эмитента": "Кредит",
     "Inside Q": "Кредит", "Outside Q": "Кредит", "NetDebt/Equity": "Кредит",
     "Коэф. ликвидности": "Кредит", "Сложность": "Кредит", "Субординированная": "Кредит",
@@ -216,13 +204,13 @@ def base_from_display(disp):
     return base.strip()
 
 
-# ================== СПРАВКИ ==================
+# ================== СПРАВКИ (ОБНОВЛЕНО ИЗ PDF) ==================
 HELP = {
     "settlement_date": "**Дата расчёта** — от неё считаются сроки до погашения и оферты.",
     "forecast_date": "**Дата прогноза** — к этой дате применяется сдвиг ключевой ставки. Срок от даты расчёта до этой даты используется в «Потенциальной доходности».",
     "rate_change_pp": "**Прогноз ставки ЦБ** — на сколько п.п. изменится ключевая ставка **к выбранной дате прогноза**.",
     "ndfl": "**Ставка НДФЛ** — налог на купонный доход. Уменьшает реальную доходность.",
-    "cbr_rate": "**Текущая ставка ЦБ** — подтягивается автоматически с сайта Банка России. Можно скорректировать вручную.",
+    "cbr_rate": "**Текущая ставка ЦБ** — базовый ориентир для оценки доходности. Введите вручную.",
     "uploaded_file": "**Excel Доход.ру (X)** — файл с метриками качества эмитента, которых нет на MOEX.",
     "industries": "**Отрасль (X)** — сектор экономики. Для диверсификации.",
     "issuer_types": "**Тип эмитента (X):** Гос / Субфед / Муницип / Корп.",
@@ -248,13 +236,13 @@ HELP = {
     "min_net_ytm": "**Мин. чистый YTM** — доходность после НДФЛ.",
     "max_duration": "**Дюрация** — на сколько % упадёт цена, если ставка вырастет на 1%.",
     "max_group": "**Группа надёжности:** 1 — ОФЗ/госбанки … 6 — нет данных.",
-    "min_credit_quality": "**Кредитное качество (X)** — оценка надёжности от 0 до 10.",
-    "min_issuer_quality": "**Качество эмитента (X)** — устойчивость бизнес-модели от 1 до 10.",
-    "min_inside_q": "**Inside Q (X)** — качество прибыли и баланса.",
-    "min_outside_q": "**Outside Q (X)** — ROE, долг, стабильность прибыли.",
-    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка.",
-    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги.",
-    "max_complexity": "**Сложность (X):** 0 — простая … 7 — структурная.",
+    "min_credit_quality": "**Кредитное качество (X)** — оценка надежности от 0 до 10. Согласно методике ДОХОДЪ, Quality = [1;3] — очень низкое, [3;4] — низкое, [4;5] — среднее, [5;6] — выше среднего, >6 — высокое.",
+    "min_issuer_quality": "**Качество эмитента (X)** — устойчивость бизнес-модели от 1 до 10. Рассчитывается как среднее Inside/Outside Quality.",
+    "min_inside_q": "**Inside Q (X)** — внутреннее качество долга (баланс и прибыль). Оценивает финансовую устойчивость и качество прибыли.",
+    "min_outside_q": "**Outside Q (X)** — внешнее качество (ROE, NetDebt/Equity, изменчивость прибыли). Оценивает эффективность бизнеса.",
+    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка (рейтинг 1-10). Чем выше, тем ниже долг. Если <=0, рейтинг 10.",
+    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги (текущая, быстрая, моментальная). ≥70 — хорошо.",
+    "max_complexity": "**Сложность (X):** 0 — простая, 1 — put-оферта, 2 — амортизируемая, 3 — плавающий купон, 4 — индексируемый, 5+ — call-опцион, вечная, структурная.",
     "only_non_subordinated": "**Только без субординации (X)** — суборды при банкротстве возвращаются после всех.",
     "only_with_guarantee": "**Только с гарантией (X)** — бумаги с поручителем или гарантом.",
     "min_volume": "**Мин. объём торгов** — низкий объём = не сможете купить без влияния на цену.",
@@ -273,6 +261,7 @@ HELP = {
     "use_colors": "**Красить ячейки** — включить/выключить подсветку.",
     "preset_select": "**Пресет** — готовый набор фильтров под стратегию.",
     "income_type": "**Тип доходности** — метрика для сортировки и отображения.",
+    "extremum_date": "**Экстремум** — дата, от которой считается изменение индекса RGBI и цены облигации для расчета 'Силы актива'."
 }
 
 
@@ -512,6 +501,7 @@ COLUMN_HELP = {
     "Z-спред по цене последней сделки": "Премия к безрисковой кривой, б.п.",
     "Z-спред по средневзвешенной цене": "Z-спред по WAP.",
     "Рыночный риск, %": "На сколько % изменится цена при изменении ставок на ваш прогноз (±п.п.).",
+    "Сила актива (Δ%)": "Разница между доходностью облигации и индекса RGBI с даты 'Экстремум'. Положительное значение (зеленый) — облигация обогнала рынок, отрицательное (красный) — отстала.",
     "Кредитное качество": "Оценка эмитента от 0 до 10 (X).",
     "Кредитный рэнкинг": "Буквенная оценка (X).",
     "Качество эмитента": "Устойчивость бизнес-модели от 1 до 10 (X).",
@@ -541,6 +531,7 @@ COLUMN_HELP = {
 
 DATE_COLS = {"Дата погашения", "Дата оферты", "Дата оценки доходности"}
 INT_COLS = {"Количество сделок", "Объем в бумагах", "Размер лота", "Объем выпуска, шт.", "Уровень листинга", "Дней до погашения", "Дней до оферты", "Период купона, дней", "Эффективный срок, дней", "Группа надёжности"}
+
 # ================== HTML-РЕНДЕР ==================
 _COLOR_BG = {"green": "#c6efce", "yellow": "#ffeb9c", "red": "#ffc7ce"}
 _COLOR_FG = {"green": "#006100", "yellow": "#9c6500", "red": "#9c0006"}
@@ -641,7 +632,7 @@ COLUMN_GROUPS = {
         "Дюрация, лет", "Дюрация, дней", "Дюрация к дате колл-опциона",
         "Дисконт к номиналу, %", "Группа надёжности",
         "Z-спред по цене последней сделки", "Z-спред по средневзвешенной цене",
-        "Рыночный риск, %",
+        "Рыночный риск, %", "Сила актива (Δ%)",
     ],
     "🏦 Кредитное качество (X)": [
         "Кредитное качество", "Кредитный рэнкинг", "Качество эмитента",
@@ -669,7 +660,7 @@ DEFAULT_VISIBLE_COLS = {
     "Цена последней сделки, %", "Изменение, % к предыдущей", "Спред, %",
     "Ставка купона, %", "Период купона, дней", "Купон", "Валюта номинала",
     "Дата погашения", "Дней до погашения", "Событие",
-    "Дюрация, лет",
+    "Дюрация, лет", "Сила актива (Δ%)",
     "Кредитное качество", "Кредитный рэнкинг", "Качество эмитента",
     "Ликвидность (комбинир.)",
 }
@@ -690,7 +681,7 @@ def _is_rub_series(df):
     return cur.isin(RUB_CURRENCIES)
 
 
-def compute_color_tags(df, cbr_rate, max_duration):
+def compute_color_tags(df, cbr_rate, max_duration, rgbi_change_pct=None):
     tags = pd.DataFrame("", index=df.index, columns=df.columns)
 
     def mark(col, mask, color):
@@ -815,6 +806,12 @@ def compute_color_tags(df, cbr_rate, max_duration):
         s = df["Флоатер"].astype(str)
         mark("Флоатер", s.str.contains("Да", na=False), "yellow")
 
+    # НОВОЕ: Раскраска "Силы актива"
+    if "Сила актива (Δ%)" in df.columns and rgbi_change_pct is not None:
+        s = df["Сила актива (Δ%)"]
+        mark("Сила актива (Δ%)", s.notna() & (s > 0), "green")
+        mark("Сила актива (Δ%)", s.notna() & (s <= 0), "red")
+
     return tags
 
 
@@ -924,7 +921,51 @@ def load_marketdata_for_board(board):
     with st.spinner(f"Загрузка marketdata: {board}..."):
         df, why = _load_marketdata_cached(board)
     return df, why
-  # ================== МЕТРИКИ ==================
+
+
+# ================== ИСТОРИЯ ЦЕН ОБЛИГАЦИЙ ==================
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_bond_history_price(secid: str, boardid: str, target_date: date):
+    """Получает цену закрытия облигации на заданную дату."""
+    url = f"{BASE_URL}/history/engines/stock/markets/bonds/boards/{boardid}/securities/{secid}.json"
+    params = {
+        "iss.meta": "off",
+        "from": target_date.strftime("%Y-%m-%d"),
+        "till": target_date.strftime("%Y-%m-%d"),
+        "history.columns": "TRADEDATE,CLOSE"
+    }
+    try:
+        r = requests.get(url, params=params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        j = r.json()
+        block = j.get("history", {})
+        rows = block.get("data", [])
+        cols = block.get("columns", [])
+        if rows and cols:
+            df = pd.DataFrame(rows, columns=cols)
+            if not df.empty and "CLOSE" in df.columns:
+                val = df["CLOSE"].iloc[-1]
+                if pd.notna(val):
+                    return float(val)
+    except Exception:
+        pass
+    return None
+
+
+def get_bond_hist_prices(tasks, target_date):
+    """Многопоточная загрузка исторических цен."""
+    results = {}
+    def worker(item):
+        secid, boardid = item
+        return secid, fetch_bond_history_price(secid, boardid, target_date)
+
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        for secid, price in executor.map(worker, tasks):
+            results[secid] = price
+    return results
+
+
+# ================== МЕТРИКИ ==================
 def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
     df = df.copy()
 
@@ -1427,64 +1468,6 @@ def apply_preset(preset_name):
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
 
 
-# ================== АВТОСТАВКА ЦБ РФ ==================
-CBR_KEY_RATE_URL = "https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx"
-
-CBR_KEY_RATE_SOAP = """<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <KeyRateXML xmlns="http://web.cbr.ru/">
-      <fromDate>{from_date}</fromDate>
-      <ToDate>{to_date}</ToDate>
-    </KeyRateXML>
-  </soap:Body>
-</soap:Envelope>"""
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def auto_cbr_rate() -> float:
-    date_to = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
-    soap = CBR_KEY_RATE_SOAP.format(from_date=date_from, to_date=date_to)
-    try:
-        r = requests.post(
-            CBR_KEY_RATE_URL,
-            data=soap.encode("utf-8"),
-            headers={
-                "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": "http://web.cbr.ru/KeyRateXML",
-            },
-            timeout=15,
-        )
-        r.raise_for_status()
-
-        outer = ET.fromstring(r.text)
-        ns = {"soap": "http://schemas.xmlsoap.org/soap/envelope/"}
-        body = outer.find("soap:Body", ns)
-        if body is None:
-            raise ValueError("SOAP-ответ без Body")
-        result = body.find(".//{http://web.cbr.ru/}KeyRateXMLResult")
-        if result is None or not result.text:
-            raise ValueError("пустой KeyRateXMLResult")
-
-        inner = ET.fromstring(result.text)
-        kr_nodes = inner.findall(".//{http://web.cbr.ru/}KR")
-        if not kr_nodes:
-            raise ValueError("нет узлов KR в ответе")
-
-        last = kr_nodes[-1]
-        rate = float(last.attrib.get("Rate", "0").replace(",", "."))
-        return rate
-    except Exception as e:
-        st.warning(
-            f"⚠️ Не удалось получить ставку ЦБ автоматически: {e}. "
-            f"Использую 0 — скорректируйте вручную."
-        )
-        return 0.0
-
-
 # ================== RGBI (MOEX ISS) ==================
 RGBI_HIST_URL = f"{BASE_URL}/history/engines/stock/markets/index/securities/RGBI.json"
 RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/RGBI.json"
@@ -1492,7 +1475,6 @@ RGBI_MKT_URL = f"{BASE_URL}/engines/stock/markets/index/boards/SNDX/securities/R
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
-    """Дневные OHLC-бары RGBI с постраничной загрузкой."""
     base_params = {
         "iss.meta": "off",
         "from": from_date.strftime("%Y-%m-%d"),
@@ -1540,7 +1522,6 @@ def fetch_rgbi_daily(from_date: date, till_date: date) -> pd.DataFrame:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_rgbi_current() -> dict | None:
-    """Текущий (сегодняшний) бар RGBI из marketdata (борд SNDX)."""
     params = {"iss.meta": "off", "iss.only": "marketdata"}
     try:
         r = requests.get(RGBI_MKT_URL, params=params, headers=HEADERS, timeout=10)
@@ -1650,7 +1631,6 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
 def add_cbr_decisions_to_chart(fig: go.Figure, decisions: list,
                                show_past: bool = True,
                                show_future: bool = True) -> go.Figure:
-    """Добавляет вертикальные линии и подписи с решениями ЦБ РФ."""
     today = date.today()
 
     for dt, rate, change in decisions:
@@ -1720,12 +1700,102 @@ def add_cbr_decisions_to_chart(fig: go.Figure, decisions: list,
             )
 
     return fig
+
 # ================== ИНТЕРФЕЙС ==================
 st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
 st.title("📊 Скринер облигаций QCKSLVR TRADING")
 st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/qckslvrtrading)")
 st.caption("Столбцы и фильтры из Excel Доход.ру помечены «(X)». "
            "Клик по SECID открывает карточку на analytics.dohod.ru.")
+
+# ================== БОКОВОЕ МЕНЮ ==================
+with st.sidebar:
+    st.header("⚙️ Параметры стратегии")
+    
+    preset_name = st.selectbox(
+        "🎯 Пресет", ["—"] + list(PRESETS.keys()),
+        key="flt_preset", help=HELP["preset_select"])
+    if preset_name != "—":
+        if st.button("Применить пресет", key="apply_preset_btn", use_container_width=True):
+            apply_preset(preset_name)
+            st.rerun()
+
+    st.markdown("---")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        settlement_date = st.date_input(
+            "Дата расчёта",
+            value=DEFAULT_DATE,
+            format="DD.MM.YYYY",
+            key="flt_settlement_date",
+            help=HELP["settlement_date"],
+        )
+    with c2:
+        extremum_date = st.date_input(
+            "Экстремум",
+            value=DEFAULT_EXTREMUM_DATE,
+            format="DD.MM.YYYY",
+            key="flt_extremum_date",
+            help=HELP["extremum_date"],
+        )
+
+    forecast_date = st.date_input(
+        "Дата прогноза ставки",
+        value=DEFAULT_FORECAST_DATE,
+        format="DD.MM.YYYY",
+        key="flt_forecast_date",
+        help=HELP["forecast_date"],
+    )
+    
+    rate_change_pp = st.number_input(
+        "Прогноз ставки ЦБ, п.п.",
+        min_value=-5.0,
+        max_value=5.0,
+        value=float(DEFAULT_RATE_FORECAST),
+        step=0.25,
+        key="flt_rate_change",
+        help=HELP["rate_change_pp"]
+    )
+
+    cbr_rate = st.number_input(
+        "Текущая ставка ЦБ, %",
+        min_value=0.0,
+        max_value=100.0,
+        value=14.0, # Значение по умолчанию для ручного ввода
+        step=0.25,
+        key="flt_cbr_rate_override",
+        help=HELP["cbr_rate"]
+    )
+
+    ndfl = st.number_input(
+        "Ставка НДФЛ, %",
+        min_value=0.0,
+        max_value=50.0,
+        value=DEFAULT_NDFL,
+        step=0.5,
+        key="flt_ndfl",
+        help=HELP["ndfl"]
+    )
+
+    st.markdown("---")
+    st.subheader("📁 Данные Доход.ру")
+    uploaded_file = st.file_uploader(
+        "Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
+        help=HELP["uploaded_file"])
+    age = get_dohod_cache_age_days()
+    if DOHOD_FILE.exists() and uploaded_file is None:
+        if age is None:
+            st.caption("📁 Кеш Доход.ру.")
+        elif age > DOHOD_FRESH_DAYS:
+            st.warning(f"⚠️ Кеш: {age} дней.")
+        elif age == 0:
+            st.success("✅ Свежий кеш.")
+        else:
+            st.info(f"📁 Кеш: {age} дн.")
+    if DOHOD_FILE.exists() or DOHOD_META.exists():
+        st.button("🗑️ Удалить кеш", key="clear_cache_btn",
+                  on_click=clear_cache_callback, use_container_width=True)
 
 # ================== ГРАФИКИ RGBI ==================
 with st.spinner("Загрузка истории RGBI..."):
@@ -1749,11 +1819,20 @@ if curr_rgbi and not rgbi_daily.empty:
         ]
         current_added = True
 
+# Расчет изменения RGBI от даты "Экстремум"
+rgbi_change_pct = None
+if not rgbi_daily.empty:
+    ext_date = pd.Timestamp(extremum_date)
+    rgbi_ext_df = rgbi_daily[rgbi_daily["TRADEDATE"] <= ext_date]
+    if not rgbi_ext_df.empty:
+        rgbi_ext = rgbi_ext_df.iloc[-1]["CLOSE"]
+        rgbi_curr = rgbi_daily.iloc[-1]["CLOSE"]
+        rgbi_change_pct = (rgbi_curr / rgbi_ext - 1) * 100
+
 if not rgbi_daily.empty:
     rgbi_weekly = resample_weekly(rgbi_daily, weeks=WEEKLY_BARS)
     rgbi_daily_short = rgbi_daily.tail(DAILY_BARS).reset_index(drop=True)
 
-    # Чекбокс для отображения решений ЦБ
     show_cbr = st.checkbox(
         "Показывать решения ЦБ по ключевой ставке",
         value=True,
@@ -1798,6 +1877,9 @@ if not rgbi_daily.empty:
             f"ℹ️ Текущий бар не получен. Последний доступный бар: "
             f"**{rgbi_daily['TRADEDATE'].iloc[-1]:%d.%m.%Y}**."
         )
+        
+    if rgbi_change_pct is not None:
+        st.metric("Изменение RGBI с даты Экстремум", f"{rgbi_change_pct:+.2f}%")
 else:
     st.warning("⚠️ Не удалось загрузить историю RGBI с MOEX ISS.")
 
@@ -1816,7 +1898,6 @@ if market_growing and market_falling:
 if market_growing:
     st.success("""
     ### 📈 Рынок растет (RGBI ↑)
-
     **Что происходит на рынке:**
     • Низкая или снижающаяся ключевая ставка.
     • Падает доходность ОФЗ (цены растут).
@@ -1843,7 +1924,6 @@ if market_growing:
 if market_falling:
     st.error("""
     ### 📉 Рынок падает (RGBI ↓)
-
     **Что происходит на рынке:**
     • Высокая или растущая ключевая ставка.
     • Растет доходность ОФЗ (цены падают).
@@ -1868,91 +1948,6 @@ if market_falling:
     """)
 
 st.markdown("---")
-
-# ================== ПАРАМЕТРЫ СТРАТЕГИИ ==================
-with st.expander("⚙️ Параметры стратегии", expanded=True):
-    preset_name = st.selectbox(
-        "🎯 Пресет", ["—"] + list(PRESETS.keys()),
-        key="flt_preset", help=HELP["preset_select"])
-    if preset_name != "—":
-        if st.button("Применить пресет", key="apply_preset_btn"):
-            apply_preset(preset_name)
-            st.rerun()
-
-    c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.6])
-    
-    with c1:
-        settlement_date = st.date_input(
-            "Дата расчёта",
-            value=DEFAULT_DATE,
-            format="DD.MM.YYYY",
-            key="flt_settlement_date",
-            help=HELP["settlement_date"],
-        )
-    with c2:
-        forecast_date = st.date_input(
-            "Дата прогноза ставки",
-            value=DEFAULT_FORECAST_DATE,
-            format="DD.MM.YYYY",
-            key="flt_forecast_date",
-            help=HELP["forecast_date"],
-        )
-    with c3:
-        rate_change_pp = st.number_input(
-            "Прогноз ставки ЦБ, п.п.",
-            min_value=-5.0,
-            max_value=5.0,
-            value=float(DEFAULT_RATE_FORECAST),
-            step=0.25,
-            key="flt_rate_change",
-            help=HELP["rate_change_pp"]
-        )
-
-    with c4:
-        _auto_cbr = auto_cbr_rate()
-        if _auto_cbr > 0:
-            st.caption(f"💡 Авто: {_auto_cbr:.2f}% (можно изменить)")
-        else:
-            st.caption("💡 Введите значение вручную")
-            
-        cbr_rate = st.number_input(
-            "Текущая ставка ЦБ, %",
-            min_value=0.0,
-            max_value=100.0,
-            value=float(_auto_cbr) if _auto_cbr > 0 else 0.0,
-            step=0.25,
-            key="flt_cbr_rate_override",
-            help=HELP["cbr_rate"]
-        )
-
-    with c5:
-        ndfl = st.number_input(
-            "Ставка НДФЛ, %",
-            min_value=0.0,
-            max_value=50.0,
-            value=DEFAULT_NDFL,
-            step=0.5,
-            key="flt_ndfl",
-            help=HELP["ndfl"]
-        )
-
-    with c6:
-        uploaded_file = st.file_uploader(
-            "📎 Excel Доход.ру (X)", type=["xlsx", "xls"], key="flt_dohod_file",
-            help=HELP["uploaded_file"])
-        age = get_dohod_cache_age_days()
-        if DOHOD_FILE.exists() and uploaded_file is None:
-            if age is None:
-                st.caption("📁 Кеш Доход.ру.")
-            elif age > DOHOD_FRESH_DAYS:
-                st.warning(f"⚠️ Кеш: {age} дней.")
-            elif age == 0:
-                st.success("✅ Свежий кеш.")
-            else:
-                st.info(f"📁 Кеш: {age} дн.")
-        if DOHOD_FILE.exists() or DOHOD_META.exists():
-            st.button("🗑️ Удалить кеш", key="clear_cache_btn",
-                      on_click=clear_cache_callback, use_container_width=True)
 
 # ================== ЗАГРУЗКА MOEX ==================
 sec_df, sec_why = load_securities()
@@ -2392,7 +2387,7 @@ with st.expander("🎯 Фильтры под стратегию", expanded=True)
                     "Группа надёжности",
                     "Объем в валюте", "Количество сделок",
                     "Рыночный риск, %",
-                    "Тип бумаги",
+                    "Тип бумаги", "Сила актива (Δ%)"
                 ],
                 key="flt_color_col_name",
             )
@@ -2453,6 +2448,30 @@ opts = {
 
 filtered = apply_filters(df, opts)
 
+# ================== РАСЧЕТ СИЛЫ АКТИВА ==================
+if not filtered.empty and rgbi_change_pct is not None:
+    with st.spinner(f"Расчет силы актива для {len(filtered)} бумаг..."):
+        tasks = [(row["SECID"], row["Режим торгов"]) for _, row in filtered.iterrows()]
+        hist_prices = get_bond_hist_prices(tasks, extremum_date)
+        
+        strengths = []
+        for idx, row in filtered.iterrows():
+            secid = row["SECID"]
+            curr_p = row.get("Цена последней сделки, %")
+            if pd.isna(curr_p):
+                curr_p = row.get("Текущая цена, %")
+                
+            hist_p = hist_prices.get(secid)
+            
+            if pd.notna(curr_p) and hist_p and hist_p > 0:
+                bond_change_pct = (curr_p / hist_p - 1) * 100
+                strength = bond_change_pct - rgbi_change_pct
+                strengths.append(strength)
+            else:
+                strengths.append(np.nan)
+                
+        filtered["Сила актива (Δ%)"] = strengths
+
 # ================== СЛУЖЕБНЫЙ СПОЙЛЕР ==================
 with st.expander("ℹ️ Справочная информация и служебные блоки", expanded=False):
     st.markdown("### 📖 Методология Доход.ру")
@@ -2495,6 +2514,7 @@ with st.expander("ℹ️ Справочная информация и служе
     | Рыночный риск | ≥ −2% | — | < −5% |
     | Флоатер | — | ✅ Да | — |
     | Тип бумаги | — | Флоатер | Суборд |
+    | Сила актива (Δ%) | > 0 | — | ≤ 0 |
     """)
 
     st.markdown("### ⏳ Детали загрузки данных")
@@ -2572,7 +2592,7 @@ with sort_col_2:
 sort_ascending = (sort_asc == "↑ Возр.")
 filtered = filtered.sort_values(sort_by, ascending=sort_ascending, na_position="last")
 
-tags_full = compute_color_tags(filtered, cbr_rate, max_duration)
+tags_full = compute_color_tags(filtered, cbr_rate, max_duration, rgbi_change_pct)
 
 if color_filter_on:
     selected_colors = set()
@@ -2691,4 +2711,3 @@ if not filtered.empty:
             st.caption("**Отрасли (X)**")
             st.dataframe(filtered["Отрасль"].value_counts().head(15)
                          .rename("Количество"), use_container_width=True)
-                                 
