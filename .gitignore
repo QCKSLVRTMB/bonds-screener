@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+
+# локальный кеш Доход.ру (может упасть в корень, если home недоступен)
+dohod_latest.xlsx
+dohod_meta.json
+.moex_bond_screener/
+
+# выгрузки
+*.csv
+moex_bonds_dashboard.csv
+
+.streamlit/secrets.toml
