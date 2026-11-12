@@ -16,10 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 BASE_URL = "https://iss.moex.com/iss"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 DEFAULT_DATE = date(2026, 10, 21)
-DEFAULT_FORECAST_DATE = date(2027, 10, 21)
+DEFAULT_FORECAST_TARGET_DATE = date(2027, 1, 1) # Дата, к которой прогнозируем ставку
 DEFAULT_EXTREMUM_DATE = date(2026, 7, 20) # Дата экстремума по умолчанию
 DEFAULT_NDFL = 13.0
-DEFAULT_RATE_FORECAST = 0.0
+DEFAULT_CURRENT_CBR = 14.0
+DEFAULT_FORECAST_CBR = 13.75
 DEFAULT_MAX_DURATION = 10.0
 DEFAULT_MIN_DAYS = 0
 DEFAULT_MIN_VOLUME = 0
@@ -109,15 +110,12 @@ def mark_x(c):
 
 # ================== РЕШЕНИЯ ЦБ РФ ПО КЛЮЧЕВОЙ СТАВКЕ ==================
 CBR_DECISIONS = [
-    # 2024 год
     (date(2024, 7, 26), 18.00, +200), (date(2024, 9, 13), 19.00, +100),
     (date(2024, 10, 25), 21.00, +200), (date(2024, 12, 20), 21.00, 0),
-    # 2025 год
     (date(2025, 2, 14), 21.00, 0), (date(2025, 3, 21), 21.00, 0),
     (date(2025, 4, 25), 21.00, 0), (date(2025, 6, 6), 20.00, -100),
     (date(2025, 7, 25), 18.00, -200), (date(2025, 9, 12), 17.00, -100),
     (date(2025, 10, 24), 16.50, -50), (date(2025, 12, 19), 16.00, -50),
-    # 2026 год
     (date(2026, 2, 13), 15.50, -50), (date(2026, 3, 20), 15.00, -50),
     (date(2026, 4, 24), 14.50, -50), (date(2026, 6, 19), 14.25, -25),
     (date(2026, 7, 24), 14.00, -25), (date(2026, 9, 11), 14.00, 0),
@@ -160,7 +158,7 @@ COL_GROUP_MAP = {
     "Дюрация к дате колл-опциона": "Доходность", "Дисконт к номиналу, %": "Доходность",
     "Группа надёжности": "Доходность", "Z-спред по цене последней сделки": "Доходность",
     "Z-спред по средневзвешенной цене": "Доходность", "Рыночный риск, %": "Доходность",
-    "Сила актива (Δ%)": "Доходность", # ДОБАВЛЕН СТОЛБЕЦ
+    "Сила актива (Δ%)": "Доходность",
     "Кредитное качество": "Кредит", "Кредитный рэнкинг": "Кредит", "Качество эмитента": "Кредит",
     "Inside Q": "Кредит", "Outside Q": "Кредит", "NetDebt/Equity": "Кредит",
     "Коэф. ликвидности": "Кредит", "Сложность": "Кредит", "Субординированная": "Кредит",
@@ -204,13 +202,13 @@ def base_from_display(disp):
     return base.strip()
 
 
-# ================== СПРАВКИ (ОБНОВЛЕНО ИЗ PDF) ==================
+# ================== СПРАВКИ ==================
 HELP = {
     "settlement_date": "**Дата расчёта** — от неё считаются сроки до погашения и оферты.",
-    "forecast_date": "**Дата прогноза** — к этой дате применяется сдвиг ключевой ставки. Срок от даты расчёта до этой даты используется в «Потенциальной доходности».",
-    "rate_change_pp": "**Прогноз ставки ЦБ** — на сколько п.п. изменится ключевая ставка **к выбранной дате прогноза**.",
+    "forecast_target_date": "**Дата прогноза** — дата, к которой ожидается изменение ключевой ставки.",
+    "rate_change_pp": "**Прогноз ставки ЦБ** — целевое значение ключевой ставки к выбранной дате. Код сам рассчитает изменение в п.п.",
     "ndfl": "**Ставка НДФЛ** — налог на купонный доход. Уменьшает реальную доходность.",
-    "cbr_rate": "**Текущая ставка ЦБ** — базовый ориентир для оценки доходности. Введите вручную.",
+    "cbr_rate": "**Текущая ставка ЦБ** — базовый ориентир для оценки доходности.",
     "uploaded_file": "**Excel Доход.ру (X)** — файл с метриками качества эмитента, которых нет на MOEX.",
     "industries": "**Отрасль (X)** — сектор экономики. Для диверсификации.",
     "issuer_types": "**Тип эмитента (X):** Гос / Субфед / Муницип / Корп.",
@@ -236,12 +234,12 @@ HELP = {
     "min_net_ytm": "**Мин. чистый YTM** — доходность после НДФЛ.",
     "max_duration": "**Дюрация** — на сколько % упадёт цена, если ставка вырастет на 1%.",
     "max_group": "**Группа надёжности:** 1 — ОФЗ/госбанки … 6 — нет данных.",
-    "min_credit_quality": "**Кредитное качество (X)** — оценка надежности от 0 до 10. Согласно методике ДОХОДЪ, Quality = [1;3] — очень низкое, [3;4] — низкое, [4;5] — среднее, [5;6] — выше среднего, >6 — высокое.",
-    "min_issuer_quality": "**Качество эмитента (X)** — устойчивость бизнес-модели от 1 до 10. Рассчитывается как среднее Inside/Outside Quality.",
-    "min_inside_q": "**Inside Q (X)** — внутреннее качество долга (баланс и прибыль). Оценивает финансовую устойчивость и качество прибыли.",
-    "min_outside_q": "**Outside Q (X)** — внешнее качество (ROE, NetDebt/Equity, изменчивость прибыли). Оценивает эффективность бизнеса.",
-    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка (рейтинг 1-10). Чем выше, тем ниже долг. Если <=0, рейтинг 10.",
-    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги (текущая, быстрая, моментальная). ≥70 — хорошо.",
+    "min_credit_quality": "**Кредитное качество (X)** — оценка надежности от 0 до 10.",
+    "min_issuer_quality": "**Качество эмитента (X)** — устойчивость бизнес-модели от 1 до 10.",
+    "min_inside_q": "**Inside Q (X)** — внутреннее качество долга (баланс и прибыль).",
+    "min_outside_q": "**Outside Q (X)** — внешнее качество (ROE, NetDebt/Equity, изменчивость прибыли).",
+    "min_netdebt": "**NetDebt/Equity (X)** — долговая нагрузка (рейтинг 1-10). Чем выше, тем ниже долг.",
+    "min_liquidity_k": "**Коэф. ликвидности (X)** — способность погасить краткосрочные долги (текущая, быстрая, моментальная).",
     "max_complexity": "**Сложность (X):** 0 — простая, 1 — put-оферта, 2 — амортизируемая, 3 — плавающий купон, 4 — индексируемый, 5+ — call-опцион, вечная, структурная.",
     "only_non_subordinated": "**Только без субординации (X)** — суборды при банкротстве возвращаются после всех.",
     "only_with_guarantee": "**Только с гарантией (X)** — бумаги с поручителем или гарантом.",
@@ -966,7 +964,7 @@ def get_bond_hist_prices(tasks, target_date):
 
 
 # ================== МЕТРИКИ ==================
-def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
+def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
     df = df.copy()
 
     for src, tgt in [("Дата погашения", "Дней до погашения"),
@@ -1052,7 +1050,7 @@ def enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp):
     else:
         df["Простая доходность, %"] = np.nan
 
-    T = (pd.Timestamp(forecast_date) - pd.Timestamp(settlement_date)).days / 365.0
+    T = (pd.Timestamp(forecast_target_date) - pd.Timestamp(settlement_date)).days / 365.0
     if T <= 0:
         T = 1.0 / 365.0
 
@@ -1461,10 +1459,17 @@ def clear_cache_callback():
 def apply_preset(preset_name):
     if preset_name not in PRESETS:
         return
+    # Получаем текущую ставку из стейта, чтобы правильно рассчитать прогноз
+    cur_rate = st.session_state.get("flt_cbr_rate", DEFAULT_CURRENT_CBR)
+    
     for k, v in PRESETS[preset_name].items():
-        st.session_state[k] = v
-        st.session_state[f"{k}_slider"] = v
-        st.session_state[f"{k}_num"] = v
+        if k == "flt_rate_change":
+            # Переводим изменение в п.п. в абсолютную целевую ставку
+            st.session_state["flt_forecast_cbr"] = cur_rate + v
+        else:
+            st.session_state[k] = v
+            st.session_state[f"{k}_slider"] = v
+            st.session_state[f"{k}_num"] = v
     st.toast(f"Пресет «{preset_name}» применён", icon="🎯")
 
 
@@ -1721,52 +1726,56 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
-
-    c1, c2 = st.columns(2)
-    with c1:
-        settlement_date = st.date_input(
-            "Дата расчёта",
-            value=DEFAULT_DATE,
-            format="DD.MM.YYYY",
-            key="flt_settlement_date",
-            help=HELP["settlement_date"],
-        )
-    with c2:
-        extremum_date = st.date_input(
-            "Экстремум",
-            value=DEFAULT_EXTREMUM_DATE,
-            format="DD.MM.YYYY",
-            key="flt_extremum_date",
-            help=HELP["extremum_date"],
-        )
-
-    forecast_date = st.date_input(
-        "Дата прогноза ставки",
-        value=DEFAULT_FORECAST_DATE,
-        format="DD.MM.YYYY",
-        key="flt_forecast_date",
-        help=HELP["forecast_date"],
-    )
     
-    rate_change_pp = st.number_input(
-        "Прогноз ставки ЦБ, п.п.",
-        min_value=-5.0,
-        max_value=5.0,
-        value=float(DEFAULT_RATE_FORECAST),
-        step=0.25,
-        key="flt_rate_change",
-        help=HELP["rate_change_pp"]
+    # Поля под полем, так как в строке не умещаются
+    settlement_date = st.date_input(
+        "Дата расчёта",
+        value=DEFAULT_DATE,
+        format="DD.MM.YYYY",
+        key="flt_settlement_date",
+        help=HELP["settlement_date"],
+    )
+    extremum_date = st.date_input(
+        "Экстремум",
+        value=DEFAULT_EXTREMUM_DATE,
+        format="DD.MM.YYYY",
+        key="flt_extremum_date",
+        help=HELP["extremum_date"],
     )
 
-    cbr_rate = st.number_input(
+    st.markdown("---")
+    
+    # Прогноз ставки: ввод абсолютных значений
+    current_cbr = st.number_input(
         "Текущая ставка ЦБ, %",
         min_value=0.0,
         max_value=100.0,
-        value=14.0, # Значение по умолчанию для ручного ввода
+        value=DEFAULT_CURRENT_CBR,
         step=0.25,
-        key="flt_cbr_rate_override",
+        key="flt_cbr_rate",
         help=HELP["cbr_rate"]
     )
+    
+    forecast_cbr = st.number_input(
+        "Прогноз ставки ЦБ, %",
+        min_value=0.0,
+        max_value=100.0,
+        value=DEFAULT_FORECAST_CBR,
+        step=0.25,
+        key="flt_forecast_cbr",
+        help=HELP["rate_change_pp"]
+    )
+    
+    forecast_target_date = st.date_input(
+        "Дата прогноза",
+        value=DEFAULT_FORECAST_TARGET_DATE,
+        format="DD.MM.YYYY",
+        key="flt_forecast_target_date",
+        help=HELP["forecast_target_date"]
+    )
+    
+    # Автоматический расчет изменения в п.п.
+    rate_change_pp = forecast_cbr - current_cbr
 
     ndfl = st.number_input(
         "Ставка НДФЛ, %",
@@ -1882,6 +1891,29 @@ if not rgbi_daily.empty:
         st.metric("Изменение RGBI с даты Экстремум", f"{rgbi_change_pct:+.2f}%")
 else:
     st.warning("⚠️ Не удалось загрузить историю RGBI с MOEX ISS.")
+
+# ================== ДИНАМИЧЕСКАЯ СПРАВКА ПО ПРОГНОЗУ ==================
+st.markdown("---")
+st.markdown("#### 🔮 Ваш прогноз по ключевой ставке")
+if rate_change_pp < 0:
+    st.success(f"""
+    **Снижение ставки:** с {current_cbr:.2f}% до {forecast_cbr:.2f}% ({rate_change_pp:+.2f} п.п.) к {forecast_target_date.strftime('%d.%m.%Y')}.
+    *   **Действия:** Ставка падает → цены на облигации растут. Длинные бумаги (высокая дюрация) с фиксированным купоном покажут наилучший результат.
+    *   **Фильтры:** Увеличьте максимальную дюрацию (до 5-7 лет), выберите тип купона "Фикс", ориентируйтесь на надежные бумаги (группа 1-3).
+    """)
+elif rate_change_pp > 0:
+    st.error(f"""
+    **Рост ставки:** с {current_cbr:.2f}% до {forecast_cbr:.2f}% ({rate_change_pp:+.2f} п.п.) к {forecast_target_date.strftime('%d.%m.%Y')}.
+    *   **Действия:** Ставка растет → цены на длинные облигации падают. Лучше сократить дюрацию (до 1-2 лет) или перейти во флоатеры, которые подстраиваются под ставку.
+    *   **Фильтры:** Ограничьте дюрацию (до 2 лет), выберите тип купона "Плавающий/Переменный" или короткие "Фикс" бумаги.
+    """)
+else:
+    st.info(f"""
+    **Ставка без изменений:** {current_cbr:.2f}% к {forecast_target_date.strftime('%d.%m.%Y')}.
+    *   **Действия:** Нейтральный сценарий. Можно ориентироваться на текущую доходность и качество эмитента.
+    """)
+
+st.markdown("---")
 
 # ================== СЦЕНАРИИ РЫНКА ==================
 st.markdown("#### 🧭 Сценарии рынка (на основе динамики RGBI)")
@@ -2111,7 +2143,7 @@ if dohod_bytes:
 
 # ================== ENRICH ==================
 with st.spinner("Расчёт метрик..."):
-    df = enrich(df, settlement_date, forecast_date, ndfl, rate_change_pp)
+    df = enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp)
 
 # ================== ДИНАМИЧЕСКИЕ ФИЛЬТРЫ ==================
 currency_options = (sorted(df["Валюта номинала"].dropna().unique().tolist())
@@ -2592,7 +2624,7 @@ with sort_col_2:
 sort_ascending = (sort_asc == "↑ Возр.")
 filtered = filtered.sort_values(sort_by, ascending=sort_ascending, na_position="last")
 
-tags_full = compute_color_tags(filtered, cbr_rate, max_duration, rgbi_change_pct)
+tags_full = compute_color_tags(filtered, current_cbr, max_duration, rgbi_change_pct)
 
 if color_filter_on:
     selected_colors = set()
