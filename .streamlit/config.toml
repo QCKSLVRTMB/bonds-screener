@@ -1,9 +1,16 @@
 [server]
 headless = true
 enableXsrfProtection = true
+maxUploadSize = 50
+
 [browser]
 gatherUsageStats = false
+
 [client]
 toolbarMode = "minimal"
+
 [runner]
 magicEnabled = false
+
+[theme]
+base = "light"
