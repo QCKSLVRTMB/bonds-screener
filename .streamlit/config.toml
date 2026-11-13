@@ -14,3 +14,8 @@ magicEnabled = false
 
 [theme]
 base = "light"
+primaryColor = "#0e4f5c"
+backgroundColor = "#f7f4ef"
+secondaryBackgroundColor = "#ece5da"
+textColor = "#0d1b2a"
+font = "sans serif"
