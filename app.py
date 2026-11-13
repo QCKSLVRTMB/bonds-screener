@@ -1,6 +1,7 @@
 # =====================================================================
 #  Скринер облигаций MOEX + Доход.ру
-#  Single-file версия: без эмодзи, с исправленными багами и ускорениями
+#  Период выплаты купона: кнопки-переключатели в блоке «Купон»
+#  Простая доходность: диапазон в блоке «Доходность и риск»
 # =====================================================================
 from __future__ import annotations
 
@@ -23,14 +24,15 @@ from plotly.subplots import make_subplots
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING", layout="wide")
+st.set_page_config(page_title="Скринер облигаций QCKSLVR TRADING",
+                   page_icon=None, layout="wide", initial_sidebar_state="expanded")
 
 # ================== НАСТРОЙКИ ==================
 BASE_URL = "https://iss.moex.com/iss"
 DOHOD_BOND_URL = "https://analytics.dohod.ru/bond/"
 
 TODAY = date.today()
-DEFAULT_DATE = TODAY                                   # было date(2026,10,21) — в прошлом
+DEFAULT_DATE = TODAY
 DEFAULT_FORECAST_TARGET_DATE = date(TODAY.year + 1, 1, 1)
 DEFAULT_EXTREMUM_DATE = TODAY - timedelta(days=120)
 DEFAULT_NDFL = 13.0
@@ -45,15 +47,18 @@ DEFAULT_MIN_POTENTIAL_RETURN = -100.0
 DEFAULT_MAX_SPREAD = 5.0
 DEFAULT_MIN_CREDIT_QUALITY = 0.0
 DEFAULT_MAX_COMPLEXITY = 7.0
+DEFAULT_MIN_SIMPLE_YIELD = -100.0
+DEFAULT_MAX_SIMPLE_YIELD = 200.0
+DEFAULT_COUPON_PERIOD_TOL = 3
 DOHOD_FRESH_DAYS = 30
 
 DAILY_BARS = 520
 WEEKLY_BARS = 175
 
-PAGE_SIZE = 100          # ISS отдаёт максимум 100 строк на страницу
+PAGE_SIZE = 100
 MAX_PAGES = 120
-HTTP_WORKERS = 8         # страниц параллельно внутри одной доски
-BOARD_WORKERS = 2        # досок параллельно (итого <= 16 соединений)
+HTTP_WORKERS = 8
+BOARD_WORKERS = 2
 HTTP_TIMEOUT = (5, 20)
 HISTORY_LOOKBACK_DAYS = 5
 TABLE_PAGE_SIZE = 200
@@ -63,6 +68,12 @@ BOND_BOARDS = ["TQCB", "TQOB", "TQOY", "TQOD", "TQIF", "TQTF",
 BOARD_PRIORITY = {"TQOB": 0, "TQCB": 1, "TQIF": 2, "TQOY": 3, "TQOD": 4,
                   "TQTF": 5, "TQBD": 6, "TQUD": 7, "TQTC": 8, "TQRD": 9, "TQIR": 10}
 RUB_CURRENCIES = {"SUR", "RUB", "RUR"}
+
+# Кнопки периода купона: канонические сроки и их короткая подпись
+COUPON_PERIOD_PRESETS = [
+    (7, "нед"), (14, "2 нед"), (30, "мес"), (61, "2 мес"),
+    (91, "кв"), (122, "4 мес"), (182, "полгода"), (365, "год"),
+]
 
 INCOME_TYPE_MAP = {
     "Эффективная (YTM)": "YTM, %",
@@ -107,6 +118,13 @@ PRESETS = {
         "flt_max_group": 2, "flt_min_potential_return": 0.0,
         "flt_rate_change": 2.0, "flt_only_with_price": True,
     },
+    "Ежемесячный купон (денежный поток)": {
+        "flt_coupon_periods": [30], "flt_coupon_period_tol": 3,
+        "flt_min_days_maturity": 365, "flt_max_duration": 3.0,
+        "flt_max_group": 3, "flt_min_credit_quality": 5.0,
+        "flt_only_non_subordinated": True, "flt_min_volume": 1_000_000,
+        "flt_only_with_price": True, "flt_only_with_maturity": True,
+    },
 }
 
 EXCEL_COLS = {
@@ -125,8 +143,6 @@ def mark_x(c: str) -> str:
 
 
 # ================== РЕШЕНИЯ ЦБ РФ ==================
-# Вынесено во внешний файл: cbr_decisions.json рядом с app.py
-# Формат: [{"date": "2026-12-18", "rate": null, "change_bp": null}, ...]
 CBR_FILE = Path(__file__).parent / "cbr_decisions.json"
 
 CBR_DECISIONS_FALLBACK = [
@@ -155,9 +171,8 @@ def load_cbr_decisions() -> list:
     return list(CBR_DECISIONS_FALLBACK)
 
 
-# ================== ЗАГОЛОВКИ (без эмодзи-префикса) ==================
+# ================== ЗАГОЛОВКИ ==================
 def display_name(col: str) -> str:
-    """Перенос длинного заголовка. Разделитель сохраняется, \n ставится ПОСЛЕ него."""
     base = mark_x(col)
     if len(base) > 22:
         for sep in (", ", " "):
@@ -173,7 +188,6 @@ def display_name_short(col: str) -> str:
 
 
 def base_from_display(disp: str) -> str:
-    """Обратное преобразование: просто убираем переносы и маркер (X)."""
     base = disp.replace("\n", "")
     if base.endswith(" (X)"):
         base = base[:-4]
@@ -197,6 +211,13 @@ HELP = {
     "max_spread": "Макс. спред, % — верхняя граница. ОФЗ <0.1%, корпораты 0.1–0.5%, >1% — низкая ликвидность.",
     "min_coupon": "Купон — выплата в % годовых.",
     "max_coupon": "Макс. купон — верхняя граница. Отсекает мусорные бумаги.",
+    "coupon_periods": ("Период выплаты купона, дней — кнопки-переключатели. "
+                       "30 ≈ ежемесячно, 91 ≈ ежеквартально, 182 ≈ раз в полгода, 365 ≈ ежегодно. "
+                       "Можно нажать несколько кнопок сразу. Ничего не выбрано — фильтр выключен. "
+                       "Частые выплаты = более быстрый денежный поток и реинвестирование."),
+    "coupon_period_tol": ("Допуск по периоду, ± дней. MOEX указывает фактические сроки "
+                          "(91 и 92, 182 и 183, 364 и 365), поэтому сравнение идёт с допуском. "
+                          "0 — только точное совпадение."),
     "coupon_type_filter": "Тип купона: Фикс / Флоатер / Индексируемый.",
     "face_type_filter": "Тип номинала: Постоянный / Амортизируемый / Индексируемый.",
     "min_days_maturity": "Мин. дней до погашения.",
@@ -210,6 +231,11 @@ HELP = {
     "min_ytm": "Мин. YTM — нижняя граница доходности.",
     "max_ytm": "Макс. YTM — выше 30% часто означает риск дефолта.",
     "min_net_ytm": "Мин. чистый YTM — доходность после НДФЛ.",
+    "min_simple_yield": ("Мин. простая доходность, % — купон плюс дисконт к номиналу, "
+                         "размазанный по сроку, без реинвестирования. "
+                         "Честная оценка «живых» денег для портфеля, где купоны тратятся."),
+    "max_simple_yield": ("Макс. простая доходность, %. Экстремально высокие значения часто "
+                         "означают ожидание дефолта или ошибочную цену."),
     "max_duration": "Дюрация — на сколько % изменится цена при изменении ставки на 1 п.п.",
     "max_group": "Группа надёжности: 1 — ОФЗ/госбанки … 6 — нет данных.",
     "min_credit_quality": "Кредитное качество (X) — оценка надежности от 0 до 10.",
@@ -267,7 +293,7 @@ COLUMN_HELP = {
     "Ставка купона, %": "Ставка купона в % годовых.",
     "Купон": "Размер купона за период.",
     "Годовой купон": "Сумма купонов за 12 месяцев.",
-    "Период купона, дней": "Дней между выплатами.",
+    "Период купона, дней": "Дней между выплатами: 30 — месяц, 91 — квартал, 182 — полгода, 365 — год.",
     "НКД": "Накопленный купонный доход.",
     "Тип купона": "Фикс/Переменный/Плавающий/Формула/Индексируемый.",
     "Тип номинала": "Постоянный/Переменный/Амортизируемый/Индексируемый.",
@@ -295,7 +321,7 @@ COLUMN_HELP = {
     "YTC, %": "Доходность к оферте.",
     "YTC call, %": "Доходность к дате call-опциона.",
     "Текущая доходность, %": "Купон / цена × 100%.",
-    "Простая доходность, %": "Без реинвестирования, с учётом дисконта к номиналу.",
+    "Простая доходность, %": "Купон + (номинал − грязная цена) / лет, делённые на грязную цену. Без реинвестирования.",
     "Доходность по последней сделке": "YTM по цене последней сделки.",
     "Доходность по средневзвешенной цене": "YTM по WAP.",
     "Доходность к оферте": "YTM до даты оферты.",
@@ -395,21 +421,16 @@ DEFAULT_VISIBLE_COLS = {
     "Цена последней сделки, %", "Изменение, % к предыдущей", "Спред, %",
     "Ставка купона, %", "Период купона, дней", "Купон", "Валюта номинала",
     "Дата погашения", "Дней до погашения", "Событие",
-    "Дюрация, лет", "Сила актива (Δ%)",
+    "Дюрация, лет", "Простая доходность, %", "Сила актива (Δ%)",
     "Кредитное качество", "Кредитный рэнкинг", "Качество эмитента",
     "Ликвидность (комбинир.)",
 }
 
-# ================== ЦВЕТА ==================
-_COLOR_BG = {"green": "#c6efce", "yellow": "#ffeb9c", "red": "#ffc7ce"}
-_COLOR_FG = {"green": "#006100", "yellow": "#9c6500", "red": "#9c0006"}
-
-# Колонки, для которых существуют правила подсветки.
-# Теги считаем только по ним, а не по всем 120 столбцам.
 COLORABLE_COLS = [
     "Потенциальная доходность, %", "YTM, %", "Чистый YTM, %", "YTC, %", "YTC call, %",
     "Текущая доходность, %", "Простая доходность, %", "Доходность по средневзвешенной цене",
-    "Ставка купона, %", "Дюрация, лет", "Дней до погашения", "Эффективный срок, дней",
+    "Ставка купона, %", "Период купона, дней", "Дюрация, лет",
+    "Дней до погашения", "Эффективный срок, дней",
     "Цена последней сделки, %", "Дисконт к номиналу, %", "Спред, %", "Группа надёжности",
     "Кредитное качество", "Качество эмитента", "Inside Q", "Outside Q", "NetDebt/Equity",
     "Коэф. ликвидности", "Сложность", "Субординированная", "С гарантией",
@@ -419,7 +440,10 @@ COLORABLE_COLS = [
     "Сила актива (Δ%)",
 ]
 
+_COLOR_BG = {"green": "#c6efce", "yellow": "#ffeb9c", "red": "#ffc7ce"}
 
+
+# ================== ЦВЕТА ==================
 def _is_rub_series(df: pd.DataFrame) -> pd.Series:
     if "Валюта номинала" not in df.columns:
         return pd.Series(False, index=df.index)
@@ -455,6 +479,12 @@ def compute_color_tags(df, cbr_rate, max_duration, rgbi_change_pct=None, columns
         if cbr_rate > 0:
             mark("Ставка купона, %", s.notna() & (s >= cbr_rate), "green")
         mark("Ставка купона, %", s.notna() & (s < 5), "red")
+
+    if "Период купона, дней" in df.columns:
+        s = pd.to_numeric(df["Период купона, дней"], errors="coerce")
+        mark("Период купона, дней", s.notna() & (s > 0) & (s <= 31), "green")
+        mark("Период купона, дней", s.notna() & (s > 92) & (s <= 183), "yellow")
+        mark("Период купона, дней", s.notna() & (s > 183), "red")
 
     if "Дюрация, лет" in df.columns:
         s = df["Дюрация, лет"]
@@ -706,7 +736,6 @@ _SESSION_LOCK = threading.Lock()
 
 
 def http_session() -> requests.Session:
-    """Единая сессия: keep-alive + пул соединений + ретраи. Без st.* (потоки!)."""
     global _SESSION
     if _SESSION is None:
         with _SESSION_LOCK:
@@ -719,7 +748,7 @@ def http_session() -> requests.Session:
                     pool_connections=HTTP_WORKERS * 2,
                     pool_maxsize=HTTP_WORKERS * 4,
                     max_retries=retry))
-                s.headers.update({"User-Agent": "bond-screener/2.0",
+                s.headers.update({"User-Agent": "bond-screener/2.1",
                                   "Accept-Encoding": "gzip, deflate"})
                 _SESSION = s
     return _SESSION
@@ -740,7 +769,6 @@ def _iss_get(path: str, blocks: tuple, params: dict) -> dict:
 
 def fetch_paged(path: str, blocks: tuple, params: dict | None = None,
                 workers: int = HTTP_WORKERS, max_pages: int = MAX_PAGES):
-    """Параллельная пагинация: страницы качаются пачками, стоп на короткой странице."""
     params = dict(params or {})
     acc = {b: [] for b in blocks}
     main = blocks[0]
@@ -779,7 +807,6 @@ def fetch_paged(path: str, blocks: tuple, params: dict | None = None,
 
 # ================== ЗАГРУЗЧИКИ ==================
 def _load_board_raw(board: str):
-    """securities + marketdata одним запросом на доску (вместо двух загрузок)."""
     frames, err = fetch_paged(
         f"engines/stock/markets/bonds/boards/{board}/securities",
         ("securities", "marketdata"))
@@ -793,7 +820,6 @@ def _load_board_raw(board: str):
             mkt["BOARDID"] = board
         keys = ["SECID", "BOARDID"]
         mkt = mkt.drop_duplicates(keys)
-        # пересекающиеся колонки берём из marketdata (торговые данные авторитетнее)
         dup = [c for c in sec.columns if c in mkt.columns and c not in keys]
         if dup:
             sec = sec.drop(columns=dup)
@@ -836,8 +862,6 @@ def _board_closes_raw(board: str, d_from: date, d_to: date):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_closes(boards: tuple, target: date, lookback: int = HISTORY_LOOKBACK_DAYS) -> pd.Series:
-    """SECID -> последнее закрытие на дату target (или ближайшее до неё).
-    Один набор запросов на доску вместо запроса на каждую бумагу."""
     d_from = target - timedelta(days=lookback)
     with ThreadPoolExecutor(max_workers=BOARD_WORKERS) as ex:
         results = list(ex.map(lambda b: _board_closes_raw(b, d_from, target), boards))
@@ -935,9 +959,9 @@ def parse_dohod_file(uploaded):
     if "ISIN" not in raw.columns:
         return pd.DataFrame(), "В файле нет столбца ISIN"
     renamed = raw.rename(columns={k: v for k, v in DOHOD_RENAME.items() if k in raw.columns})
-    keep = ["ISIN"] + [v for v in DOHOD_RENAME.values()
-                       if v in renamed.columns and v != "ISIN"]
-    renamed = renamed[keep].copy()
+    keep_cols = ["ISIN"] + [v for v in DOHOD_RENAME.values()
+                            if v in renamed.columns and v != "ISIN"]
+    renamed = renamed[keep_cols].copy()
     renamed["ISIN"] = renamed["ISIN"].astype(str).str.strip().str.upper()
     renamed = renamed.drop_duplicates(subset=["ISIN"], keep="first")
     num_cols = ["Кредитное качество", "Качество эмитента", "Inside Q", "Outside Q",
@@ -957,7 +981,7 @@ def parse_dohod_cached(file_bytes: bytes):
     return parse_dohod_file(file_bytes)
 
 
-# ================== МЕТРИКИ (векторные) ==================
+# ================== МЕТРИКИ ==================
 def _join_labels(parts: list) -> np.ndarray:
     out = np.full(len(parts[0]), "", dtype=object)
     for p in parts:
@@ -1000,7 +1024,7 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
         df.loc[mask_no_kq & (level == 2), "Группа надёжности"] = 3
         df.loc[mask_no_kq & (level == 3), "Группа надёжности"] = 4
     if "Режим торгов" in df.columns:
-        df.loc[df["Режим торгов"] == "TQOB", "Группа надёжности"] = 1
+        df.loc[df["Режим торгов"].astype(str) == "TQOB", "Группа надёжности"] = 1
     df["Группа надёжности"] = df["Группа надёжности"].astype(int)
 
     df["YTM, %"] = np.nan
@@ -1036,9 +1060,10 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
 
     if all(c in df.columns for c in ("Годовой купон", "Грязная цена", "Номинал", "Дней до погашения")):
         years = (df["Дней до погашения"] / 365.0).where(lambda s: s > 0.05)
+        dirty = df["Грязная цена"].where(lambda s: s > 0)
         df["Простая доходность, %"] = (
             (df["Годовой купон"] + (df["Номинал"] - df["Грязная цена"]) / years)
-            / df["Грязная цена"] * 100.0)
+            / dirty * 100.0)
     else:
         df["Простая доходность, %"] = np.nan
 
@@ -1061,7 +1086,6 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
             df.loc[fl, "Прогнозная цена, %"] = np.nan
             df.loc[fl, "Потенциальная доходность, %"] = np.nan
 
-    # --- Рыночный риск: вектор вместо apply(axis=1) ---
     if "Дюрация, лет" in df.columns:
         fallback = np.where(_is_rub_series(df), 2.0, 1.0)
         delta = rate_change_pp if abs(rate_change_pp) > 0.001 else fallback
@@ -1069,14 +1093,12 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
     else:
         df["Рыночный риск, %"] = np.nan
 
-    # --- Ликвидность: вектор ---
     k = df["Коэф. ликвидности"] if "Коэф. ликвидности" in df.columns else pd.Series(np.nan, index=df.index)
     n = df["Количество сделок"] if "Количество сделок" in df.columns else pd.Series(np.nan, index=df.index)
     kk, nn = k / 100.0, n.clip(upper=100) / 100.0
     df["Ликвидность (комбинир.)"] = np.where(
         k.notna() & n.notna(), kk * 0.6 + nn * 0.4, np.where(k.notna(), kk, nn))
 
-    # --- Ближайшее событие: вектор ---
     nat = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
     o = df["Дата оферты"] if "Дата оферты" in df.columns else nat
     m = df["Дата погашения"] if "Дата погашения" in df.columns else nat
@@ -1085,7 +1107,6 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
     df["Ближайшая дата, лет"] = (nearest - ts).dt.days / 365.0
     df["Событие"] = np.where(use_offer, "Оферта", np.where(m.notna(), "Погашение", ""))
 
-    # --- Тип бумаги: вектор ---
     empty = pd.Series("", index=df.index, dtype=object)
     cp = (df["Тип купона"].astype(str).str.lower() if "Тип купона" in df.columns else empty)
     fv = (df["Тип номинала"].astype(str).str.lower() if "Тип номинала" in df.columns else empty)
@@ -1103,6 +1124,16 @@ def enrich(df, settlement_date, forecast_target_date, ndfl, rate_change_pp):
     df["Тип бумаги"] = np.where(labels == "", "—", labels)
     df["Флоатер"] = np.where(is_float, "Да", "—")
     return df
+
+
+def _fingerprint(df: pd.DataFrame) -> str:
+    parts = [str(len(df)), str(len(df.columns))]
+    for c in ("Цена последней сделки, %", "Доходность по последней сделке",
+              "Дюрация, дней", "Период купона, дней"):
+        if c in df.columns:
+            s = pd.to_numeric(df[c], errors="coerce")
+            parts.append(f"{float(s.sum(skipna=True)):.4f}")
+    return "|".join(parts)
 
 
 @st.cache_data(ttl=600, show_spinner=False, max_entries=8)
@@ -1135,6 +1166,27 @@ def keep(f, col, mask, keep_na):
     return f[f[col].isna() | mask] if keep_na else f[mask]
 
 
+def coupon_period_stats(df, tol):
+    """Сколько бумаг попадает в каждый канонический период с текущим допуском."""
+    if "Период купона, дней" not in df.columns:
+        return []
+    per = pd.to_numeric(df["Период купона, дней"], errors="coerce")
+    out = []
+    for p, short in COUPON_PERIOD_PRESETS:
+        n = int(((per - p).abs() <= tol).sum())
+        if n > 0:
+            out.append((p, short, n))
+    if not out:
+        vals = per.dropna()
+        vals = vals[vals > 0]
+        for p in sorted(vals.unique().tolist())[:10]:
+            p = int(round(float(p)))
+            n = int(((per - p).abs() <= tol).sum())
+            if n > 0:
+                out.append((p, "", n))
+    return out
+
+
 def apply_filters(f, o):
     keep_na = o["keep_na"]
     if o["only_with_price"]:
@@ -1154,6 +1206,13 @@ def apply_filters(f, o):
         f = keep(f, "YTM, %", (f["YTM, %"] >= o["min_ytm"]) & (f["YTM, %"] <= o["max_ytm"]), keep_na)
     if "Чистый YTM, %" in f.columns:
         f = keep(f, "Чистый YTM, %", f["Чистый YTM, %"] >= o["min_net_ytm"], keep_na)
+
+    # --- Простая доходность: диапазон ---
+    if "Простая доходность, %" in f.columns:
+        s = pd.to_numeric(f["Простая доходность, %"], errors="coerce")
+        f = keep(f, "Простая доходность, %",
+                 (s >= o["min_simple_yield"]) & (s <= o["max_simple_yield"]), keep_na)
+
     if "Дней до погашения" in f.columns:
         f = keep(f, "Дней до погашения",
                  (f["Дней до погашения"] >= o["min_days_maturity"]) &
@@ -1207,6 +1266,16 @@ def apply_filters(f, o):
         f = keep(f, "Ставка купона, %",
                  (f["Ставка купона, %"] >= o["min_coupon"]) &
                  (f["Ставка купона, %"] <= o["max_coupon"]), keep_na)
+
+    # --- Период выплаты купона: кнопки-переключатели с допуском ---
+    if "Период купона, дней" in f.columns and o.get("coupon_periods"):
+        per = pd.to_numeric(f["Период купона, дней"], errors="coerce")
+        tol = int(o.get("coupon_period_tol", 0))
+        mask_period = pd.Series(False, index=f.index)
+        for p in o["coupon_periods"]:
+            mask_period |= (per - float(p)).abs() <= tol
+        f = keep(f, "Период купона, дней", mask_period, keep_na)
+
     if o["only_discount"] and "Дисконт к номиналу, %" in f.columns:
         f = keep(f, "Дисконт к номиналу, %", f["Дисконт к номиналу, %"] >= 0, keep_na)
     if "Валюта номинала" in f.columns and o["currency_filter"]:
@@ -1253,6 +1322,7 @@ FILTER_DEFAULTS = {
     "flt_only_with_price": True, "flt_only_discount": False,
     "flt_min_spread": 0.0, "flt_max_spread": DEFAULT_MAX_SPREAD,
     "flt_min_coupon": 0.0, "flt_max_coupon": 50.0, "flt_max_lot_cost": 0,
+    "flt_coupon_periods": [], "flt_coupon_period_tol": DEFAULT_COUPON_PERIOD_TOL,
     "flt_min_days_maturity": DEFAULT_MIN_DAYS, "flt_max_days_maturity": 0,
     "flt_min_eff_days": 0, "flt_max_eff_days": 0,
     "flt_only_with_maturity": True, "flt_only_with_offer": False,
@@ -1260,6 +1330,8 @@ FILTER_DEFAULTS = {
     "flt_max_duration": DEFAULT_MAX_DURATION, "flt_max_group": DEFAULT_MAX_GROUP,
     "flt_only_with_ytm": False, "flt_min_ytm": -50.0, "flt_max_ytm": 100.0,
     "flt_min_net_ytm": -50.0,
+    "flt_min_simple_yield": DEFAULT_MIN_SIMPLE_YIELD,
+    "flt_max_simple_yield": DEFAULT_MAX_SIMPLE_YIELD,
     "flt_min_credit_quality": DEFAULT_MIN_CREDIT_QUALITY, "flt_min_issuer_quality": 0.0,
     "flt_min_inside_q": 0.0, "flt_min_outside_q": 0.0, "flt_min_netdebt": 0.0,
     "flt_min_liquidity_k": 0.0, "flt_max_complexity": DEFAULT_MAX_COMPLEXITY,
@@ -1279,7 +1351,7 @@ FILTER_DEFAULTS = {
 def init_state(defaults: dict):
     for k, v in defaults.items():
         if k not in st.session_state:
-            st.session_state[k] = v
+            st.session_state[k] = list(v) if isinstance(v, list) else v
 
 
 def reset_all_filters():
@@ -1310,12 +1382,11 @@ def apply_preset_callback():
         if k == "flt_rate_change":
             st.session_state["flt_forecast_cbr"] = float(min(max(cur + v, 0.0), 100.0))
         else:
-            st.session_state[k] = v
+            st.session_state[k] = list(v) if isinstance(v, list) else v
     st.toast(f"Пресет «{name}» применён")
 
 
 def num_input(label, min_v, max_v, step, key, help_text="", is_excel=False, integer=False):
-    """Один виджет вместо связки слайдер+поле+2 кнопки (в 4 раза меньше виджетов)."""
     if is_excel:
         st.markdown(f"<span class='x-label'>{_html.escape(label)}</span>",
                     unsafe_allow_html=True)
@@ -1326,6 +1397,20 @@ def num_input(label, min_v, max_v, step, key, help_text="", is_excel=False, inte
     return float(st.number_input(label, min_value=float(min_v), max_value=float(max_v),
                                  step=float(step), key=key, help=help_text, format="%.2f",
                                  label_visibility="collapsed" if is_excel else "visible"))
+
+
+def coupon_period_buttons(options, labels, key, help_text):
+    """Кнопки-переключатели периода купона. Внутри формы — st.pills, иначе multiselect."""
+    def fmt(p):
+        short = labels.get(p, "")
+        return f"{p} дн" + (f" · {short}" if short else "")
+
+    if hasattr(st, "pills"):
+        return st.pills("Период выплаты купона, дней", options,
+                        selection_mode="multi", format_func=fmt,
+                        key=key, help=help_text) or []
+    return st.multiselect("Период выплаты купона, дней", options,
+                          format_func=fmt, key=key, help=help_text)
 
 
 def checkbox_group(options, key_prefix, default_selected, n_cols=2):
@@ -1349,6 +1434,9 @@ def ensure_multiselect(key, options, default):
 
 
 def ensure_select(key, options, default):
+    if not options:
+        st.session_state[key] = default
+        return
     if st.session_state.get(key) not in options:
         st.session_state[key] = default if default in options else options[0]
 
@@ -1383,9 +1471,15 @@ def render_table(res: pd.DataFrame, tags: pd.DataFrame, links: pd.Series, use_co
     pages = max(1, (total + page_size - 1) // page_size)
     cur_page = int(st.session_state.get("view_page", 1))
     st.session_state["view_page"] = min(max(1, cur_page), pages)
-    page = c2.number_input("Страница", min_value=1, max_value=pages, step=1, key="view_page")
+    if pages > 1:
+        page = int(c2.number_input("Страница", min_value=1, max_value=pages,
+                                   step=1, key="view_page"))
+    else:
+        page = 1
+        c2.markdown("<div class='page-note'>Страница 1 из 1</div>", unsafe_allow_html=True)
     start, stop = (page - 1) * page_size, min(page * page_size, total)
-    c3.caption(f"Всего строк: {total}. Показаны {start + 1}–{stop}.")
+    c3.markdown(f"<div class='page-note'>Всего строк: <b>{total}</b>. "
+                f"Показаны {start + 1}–{stop}.</div>", unsafe_allow_html=True)
 
     view = res.iloc[start:stop]
     fmt = _format_frame(view)
@@ -1431,7 +1525,7 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
     fig.add_trace(go.Ohlc(
         x=df["TRADEDATE"], open=df["OPEN"], high=df["HIGH"],
         low=df["LOW"], close=df["CLOSE"], name="RGBI",
-        increasing_line_color="black", decreasing_line_color="black",
+        increasing_line_color="#0f7a4d", decreasing_line_color="#b3261e",
         line=dict(width=2),
         hovertemplate="%{x|%d.%m.%Y}<br>O: %{open:.2f}<br>H: %{high:.2f}"
                       "<br>L: %{low:.2f}<br>C: %{close:.2f}<extra></extra>"),
@@ -1440,20 +1534,23 @@ def make_rgbi_chart(df: pd.DataFrame, title: str, is_daily: bool = False) -> go.
     fig.add_trace(go.Scatter(
         x=[df["TRADEDATE"].iloc[0], df["TRADEDATE"].iloc[-1]],
         y=[current, current], mode="lines",
-        line=dict(color="#1a73e8", width=1.5, dash="dot"),
+        line=dict(color="#12707f", width=1.5, dash="dot"),
         showlegend=False, hoverinfo="skip"), secondary_y=True)
     fig.add_annotation(x=1.01, xref="paper", y=current, yref="y2",
                        text=f"{current:.2f}", showarrow=False,
-                       font=dict(size=12, color="#1a73e8"),
-                       bgcolor="rgba(255,255,255,0.85)",
-                       bordercolor="#1a73e8", borderwidth=1, xanchor="left")
+                       font=dict(size=12, color="#08323b"),
+                       bgcolor="rgba(255,253,249,0.92)",
+                       bordercolor="#12707f", borderwidth=1, xanchor="left")
     y_min, y_max = float(df["LOW"].min()) * 0.999, float(df["HIGH"].max()) * 1.001
     fig.update_layout(
-        title=title, height=360, margin=dict(l=10, r=70, t=60, b=10),
+        title=dict(text=title, font=dict(size=14, color="#08323b")),
+        height=360, margin=dict(l=10, r=70, t=60, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,253,249,0.65)",
+        font=dict(color="#22384a"),
         xaxis=dict(showgrid=False, rangeslider_visible=False,
                    rangebreaks=[dict(bounds=["sat", "mon"])] if is_daily else []),
         yaxis=dict(title="RGBI", side="left", range=[y_min, y_max],
-                   showgrid=True, gridcolor="#eeeeee"),
+                   showgrid=True, gridcolor="#e6ded1"),
         yaxis2=dict(title="Текущая", overlaying="y", side="right",
                     showgrid=False, range=[y_min, y_max]),
         showlegend=False)
@@ -1466,20 +1563,20 @@ def add_cbr_decisions_to_chart(fig, decisions, show_past=True, show_future=True)
         if (is_future and not show_future) or (not is_future and not show_past):
             continue
         if is_future:
-            line_color, dash, width = "#888888", "dot", 1
-            text_color, bg, border = "#888888", "rgba(255,255,255,0.85)", "#888888"
+            line_color, dash, width = "#8a8172", "dot", 1
+            text_color, bg, border = "#6b6355", "rgba(255,253,249,0.9)", "#8a8172"
         elif change is None:
-            line_color, dash, width = "#cccccc", "solid", 1
-            text_color, bg, border = "#666666", "#f5f5f5", "#9e9e9e"
+            line_color, dash, width = "#cdc4b4", "solid", 1
+            text_color, bg, border = "#5c5346", "#f1ebe0", "#9c9384"
         elif change < 0:
-            line_color, dash, width = "#2e7d32", "solid", 1
-            text_color, bg, border = "#1b5e20", "#e8f5e9", "#2e7d32"
+            line_color, dash, width = "#0f7a4d", "solid", 1
+            text_color, bg, border = "#0b5c3a", "#e6f4ec", "#0f7a4d"
         elif change > 0:
-            line_color, dash, width = "#c62828", "solid", 1
-            text_color, bg, border = "#b71c1c", "#ffebee", "#c62828"
+            line_color, dash, width = "#b3261e", "solid", 1
+            text_color, bg, border = "#8c1d17", "#fbeae9", "#b3261e"
         else:
-            line_color, dash, width = "#9e9e9e", "solid", 1
-            text_color, bg, border = "#616161", "#f5f5f5", "#9e9e9e"
+            line_color, dash, width = "#9c9384", "solid", 1
+            text_color, bg, border = "#5c5346", "#f1ebe0", "#9c9384"
         ts = pd.Timestamp(dt)
         fig.add_shape(type="line", x0=ts, x1=ts, y0=0, y1=1, yref="paper",
                       line=dict(color=line_color, width=width, dash=dash), opacity=0.7)
@@ -1495,32 +1592,159 @@ def add_cbr_decisions_to_chart(fig, decisions, show_past=True, show_future=True)
                                yanchor="bottom", yshift=2, text=text, showarrow=False,
                                font=dict(size=8, color=text_color), bgcolor=bg,
                                bordercolor=border, borderwidth=1, borderpad=1,
-                               opacity=0.6 if is_future else 0.9)
+                               opacity=0.6 if is_future else 0.92)
     return fig
 
 
 # =====================================================================
-#  ИНТЕРФЕЙС
+#  ВИЗУАЛЬНЫЙ СЛОЙ
 # =====================================================================
 init_state(FILTER_DEFAULTS)
 
 st.markdown("""<style>
-.tbl-wrap{overflow:auto;max-height:620px;border:1px solid #ddd;border-radius:4px}
-.screener{border-collapse:collapse;font-size:.85em;width:100%}
-.screener th{padding:4px 8px;border:1px solid #ddd;background:#f5f5f5;position:sticky;
- top:0;z-index:1;white-space:pre-line;text-align:left}
-.screener td{padding:3px 8px;border:1px solid #eee;white-space:nowrap}
-.screener a{color:#1a73e8;text-decoration:none;font-weight:600}
-.screener td.c-green{background:#c6efce;color:#006100}
-.screener td.c-yellow{background:#ffeb9c;color:#9c6500}
-.screener td.c-red{background:#ffc7ce;color:#9c0006}
-.x-label{color:#28a745;font-weight:600}
+:root{
+  --ink:#0d1b2a; --ink-soft:#22384a;
+  --paper:#f7f4ef; --surface:#fffdf9; --surface-2:#ece5da;
+  --petrol:#0e4f5c; --petrol-bright:#12707f; --petrol-deep:#08323b;
+  --brass:#c8891c; --brass-soft:#e8b64c;
+  --ok:#0f7a4d; --warn:#9c6500; --danger:#b3261e; --info:#1a56db;
+  --line:#ddd3c4;
+}
+html,body,[class*="css"]{font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,Arial,sans-serif;}
+[data-testid="stAppViewContainer"]{
+  background:
+    radial-gradient(1100px 560px at 10% -12%, rgba(18,112,127,.13), transparent 62%),
+    radial-gradient(900px 480px at 102% -4%, rgba(200,137,28,.14), transparent 58%),
+    linear-gradient(180deg,#f8f5f0 0%, #f1ece4 100%);
+}
+[data-testid="stHeader"]{background:transparent;}
+.block-container{padding-top:1.4rem;padding-bottom:4rem;max-width:1680px;}
+footer{visibility:hidden;}
+
+*{scrollbar-width:thin;scrollbar-color:var(--petrol) var(--surface-2);}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:var(--surface-2);border-radius:9px;}
+::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,var(--petrol-bright),var(--petrol-deep));
+  border-radius:9px;border:2px solid var(--surface-2);}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--brass-soft),#8a5e0b);}
+::-webkit-scrollbar-corner{background:var(--surface-2);}
+
+.hero{position:relative;overflow:hidden;border-radius:18px;padding:22px 28px;margin-bottom:14px;
+  background:linear-gradient(118deg,var(--petrol-deep) 0%, var(--petrol) 46%, #16324a 100%);
+  border:1px solid rgba(232,182,76,.34);
+  box-shadow:0 22px 44px -28px rgba(8,50,59,.95);
+  animation:heroIn .5s cubic-bezier(.2,.7,.3,1) both;}
+.hero::after{content:"";position:absolute;right:-90px;top:-160px;width:420px;height:420px;
+  background:radial-gradient(circle,rgba(232,182,76,.30),transparent 62%);pointer-events:none;}
+.hero h1{margin:0;font-size:1.72rem;line-height:1.2;color:#fdfaf5;letter-spacing:-.015em;font-weight:750;}
+.hero .kicker{display:inline-block;font-size:.7rem;letter-spacing:.19em;text-transform:uppercase;
+  color:var(--brass-soft);font-weight:700;margin-bottom:8px;}
+.hero .sub{margin:10px 0 0;color:#cfe0e3;font-size:.9rem;max-width:74ch;}
+.hero a{color:var(--brass-soft);text-decoration:none;border-bottom:1px solid rgba(232,182,76,.45);}
+.hero a:hover{color:#fff;}
+.hero-rule{height:3px;border-radius:3px;margin:14px 0 0;
+  background:linear-gradient(90deg,var(--brass) 0%, rgba(200,137,28,.15) 60%, transparent 100%);}
+@keyframes heroIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#fffdf9 0%, #efe8dd 100%);
+  border-right:1px solid var(--line);}
+[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{
+  color:var(--petrol-deep);letter-spacing:-.01em;}
+[data-testid="stSidebar"] hr{border-color:var(--line);}
+
+.stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"]>button{
+  border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  font-weight:650;transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease, filter .2s ease;}
+.stButton>button:hover{border-color:var(--petrol);color:var(--petrol-deep);
+  box-shadow:0 8px 20px -12px rgba(14,79,92,.9);transform:translateY(-1px);}
+.stButton>button:active{transform:translateY(0);}
+[data-testid="stFormSubmitButton"]>button{
+  background:linear-gradient(118deg,var(--petrol) 0%, var(--petrol-bright) 100%);
+  color:#fff;border-color:transparent;letter-spacing:.01em;}
+[data-testid="stFormSubmitButton"]>button:hover{filter:brightness(1.07);color:#fff;
+  box-shadow:0 12px 26px -14px rgba(14,79,92,1);}
+.stDownloadButton>button{border-color:var(--brass);color:#7a5209;
+  background:linear-gradient(180deg,#fff8ea,#fbeed4);}
+.stDownloadButton>button:hover{border-color:#8a5e0b;color:#5e3f06;
+  box-shadow:0 8px 20px -12px rgba(200,137,28,.95);}
+
+[data-testid="stPills"]{gap:6px;}
+[data-testid="stPills"] button{
+  border-radius:999px !important;border:1px solid var(--line) !important;
+  background:var(--surface) !important;color:var(--ink-soft) !important;
+  font-weight:680;font-variant-numeric:tabular-nums;padding:.28rem .85rem;
+  transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease;}
+[data-testid="stPills"] button:hover{border-color:var(--petrol) !important;transform:translateY(-1px);}
+[data-testid="stPills"] button[aria-pressed="true"],
+[data-testid="stPills"] button[aria-selected="true"],
+[data-testid="stPills"] button[kind="primary"],
+[data-testid="stPills"] button[kind="pills"][aria-checked="true"]{
+  background:linear-gradient(118deg,var(--petrol) 0%, var(--petrol-bright) 100%) !important;
+  color:#fff !important;border-color:transparent !important;
+  box-shadow:0 8px 18px -12px rgba(14,79,92,1);}
+
+[data-testid="stExpander"]{border:1px solid var(--line);border-radius:13px;
+  background:var(--surface);box-shadow:0 10px 26px -24px rgba(13,27,42,.8);}
+[data-testid="stExpander"] summary{font-weight:680;color:var(--petrol-deep);}
+[data-testid="stExpander"] summary:hover{color:var(--brass);}
+[data-testid="stExpander"] [data-testid="stExpander"]{box-shadow:none;background:#fffefb;}
+
+[data-testid="stMetric"]{background:var(--surface);border:1px solid var(--line);
+  border-left:4px solid var(--brass);border-radius:13px;padding:12px 15px;
+  box-shadow:0 12px 26px -26px rgba(13,27,42,.9);}
+[data-testid="stMetricValue"]{color:var(--petrol-deep);font-variant-numeric:tabular-nums;}
+[data-testid="stMetricLabel"]{color:var(--ink-soft);font-weight:600;}
+
+.x-label{color:var(--ok);font-weight:680;}
+.page-note{padding-top:1.9rem;color:var(--ink-soft);font-size:.86rem;}
+.filter-note{color:var(--ink-soft);font-size:.82rem;margin:.15rem 0 .5rem;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:.2rem 0 .8rem;}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;
+  font-size:.8rem;font-weight:650;background:#fffefb;border:1px solid var(--line);color:var(--petrol-deep);}
+.chip b{color:var(--brass);font-weight:750;}
+
+.tbl-wrap{overflow:auto;max-height:640px;border:1px solid var(--line);border-radius:14px;
+  background:var(--surface);box-shadow:0 18px 40px -34px rgba(13,27,42,1);}
+.screener{border-collapse:separate;border-spacing:0;font-size:.85em;width:100%;
+  font-variant-numeric:tabular-nums;}
+.screener th{padding:8px 10px;border-right:1px solid rgba(255,255,255,.14);
+  border-bottom:1px solid var(--petrol-deep);
+  background:linear-gradient(180deg,var(--petrol) 0%, var(--petrol-deep) 100%);
+  color:#fdfaf5;position:sticky;top:0;z-index:2;white-space:pre-line;text-align:left;
+  font-weight:650;letter-spacing:.005em;}
+.screener td{padding:5px 10px;border-bottom:1px solid #efe8dd;border-right:1px solid #f3ece1;
+  white-space:nowrap;color:var(--ink);}
+.screener tbody tr:nth-child(even) td{background:#fbf8f3;}
+.screener tbody tr:hover td{background:#f2f7f7;}
+.screener a{color:var(--petrol);text-decoration:none;font-weight:750;
+  border-bottom:1px solid rgba(14,79,92,.3);}
+.screener a:hover{color:var(--brass);border-bottom-color:var(--brass);}
+.screener td.c-green{background:#c6efce !important;color:#006100 !important;font-weight:600;}
+.screener td.c-yellow{background:#ffeb9c !important;color:#9c6500 !important;font-weight:600;}
+.screener td.c-red{background:#ffc7ce !important;color:#9c0006 !important;font-weight:600;}
+
+[data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+hr{border-color:var(--line);}
+@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important}}
+@media (max-width: 900px){
+  .hero{padding:18px 18px;} .hero h1{font-size:1.3rem;}
+  .block-container{padding-left:1rem;padding-right:1rem;}
+  .page-note{padding-top:.4rem;}
+}
 </style>""", unsafe_allow_html=True)
 
-st.title("Скринер облигаций QCKSLVR TRADING")
-st.markdown("Сообщество: [https://vk.ru/qckslvrtrading](https://vk.ru/qckslvrtrading)")
-st.caption("Столбцы и фильтры из Excel Доход.ру помечены «(X)». "
-           "Клик по SECID открывает карточку на analytics.dohod.ru по ISIN.")
+st.markdown("""
+<div class="hero">
+  <span class="kicker">MOEX ISS · Доход.ру · фиксированный доход</span>
+  <h1>Скринер облигаций QCKSLVR TRADING</h1>
+  <div class="hero-rule"></div>
+  <p class="sub">Отбор по денежному потоку, дюрации и кредитному качеству.
+  Столбцы и фильтры из Excel Доход.ру помечены «(X)».
+  Клик по SECID открывает карточку выпуска на analytics.dohod.ru.
+  Сообщество: <a href="https://vk.ru/qckslvrtrading" target="_blank" rel="noopener noreferrer">vk.ru/qckslvrtrading</a></p>
+</div>
+""", unsafe_allow_html=True)
 
 # ================== БОКОВОЕ МЕНЮ ==================
 with st.sidebar:
@@ -1583,7 +1807,7 @@ if curr_rgbi and not rgbi_daily.empty:
 rgbi_change_pct = None
 if not rgbi_daily.empty:
     ext_df = rgbi_daily[rgbi_daily["TRADEDATE"] <= pd.Timestamp(extremum_date)]
-    if not ext_df.empty:
+    if not ext_df.empty and float(ext_df.iloc[-1]["CLOSE"]) > 0:
         rgbi_change_pct = (rgbi_daily.iloc[-1]["CLOSE"] / ext_df.iloc[-1]["CLOSE"] - 1) * 100
 
 if not rgbi_daily.empty:
@@ -1655,6 +1879,7 @@ if market_growing:
 |---|---|
 | Дюрация, лет | до 5–7 |
 | Тип купона | Фиксированный |
+| Период купона | 91 или 182 дня |
 | Кредитное качество (X) | от 7 |
 | Группа надёжности | 1–3 |
 | Прогноз ставки ЦБ | −1…−2 п.п. |
@@ -1669,6 +1894,7 @@ if market_falling:
 |---|---|
 | Дюрация, лет | до 2–2.5 |
 | Тип купона | Флоатер или короткий Фикс |
+| Период купона | 30 дней — быстрее реинвест по новой ставке |
 | Кредитное качество (X) | от 8 |
 | Группа надёжности | 1–2 |
 | Прогноз ставки ЦБ | +1…+2 п.п. |
@@ -1763,6 +1989,7 @@ if dohod_bytes is None:
     cached = load_cached_dohod_bytes()
     if cached:
         dohod_bytes, dohod_origin = cached, "cache"
+        st.session_state.setdefault("dohod_hash", _file_hash(cached))
 
 if dohod_bytes:
     with st.spinner("Парсинг Excel Доход.ру..."):
@@ -1783,7 +2010,7 @@ if dohod_bytes:
                 df.loc[mask, "Отрасль"] = determine_industry_vectorized(df[mask])
 
 # ================== ENRICH ==================
-data_key = f"{len(df)}:{len(df.columns)}:{st.session_state.get('dohod_hash', 'none')}"
+data_key = f"{_fingerprint(df)}:{st.session_state.get('dohod_hash', 'none')}"
 with st.spinner("Расчёт метрик..."):
     df = enrich_cached(df, data_key, settlement_date, forecast_target_date, ndfl, rate_change_pp)
 
@@ -1791,6 +2018,7 @@ for c in ("Режим торгов", "Валюта номинала", "Отра�
           "Тип бумаги", "Тип эмитента (Доход.ру)"):
     if c in df.columns:
         df[c] = df[c].astype("category")
+
 
 # ================== ОПЦИИ ФИЛЬТРОВ ==================
 def _options(col, cast=None):
@@ -1820,7 +2048,7 @@ ensure_select("flt_color_col_name", color_col_options or ["—"], "Спред, %
 COLOR_LABELS = {"green": "Зелёные", "yellow": "Жёлтые",
                 "red": "Красные", "uncolored": "Без подсветки"}
 
-# ================== ФИЛЬТРЫ (одна форма = один rerun) ==================
+# ================== ФИЛЬТРЫ ==================
 with st.expander("Фильтры под стратегию", expanded=True):
     with st.form("filters", border=False):
         r1a, r1b, r1c = st.columns(3)
@@ -1833,14 +2061,37 @@ with st.expander("Фильтры под стратегию", expanded=True):
                                    HELP["min_spread"])
             max_spread = num_input("Макс. спред, %", 0.0, 5.0, 0.05, "flt_max_spread",
                                    HELP["max_spread"])
-        with r1b, st.expander("Купон", expanded=False):
+
+        with r1b, st.expander("Купон", expanded=True):
             min_coupon = num_input("Мин. ставка купона, %", 0.0, 50.0, 0.5,
                                    "flt_min_coupon", HELP["min_coupon"])
             max_coupon = num_input("Макс. ставка купона, %", 0.0, 50.0, 0.5,
                                    "flt_max_coupon", HELP["max_coupon"])
+
+            st.markdown("<div class='filter-note'><b>Период выплаты купона</b> — "
+                        "нажмите одну или несколько кнопок. Пусто = все периоды.</div>",
+                        unsafe_allow_html=True)
+            coupon_period_tol = num_input("Допуск по периоду, ± дней", 0, 15, 1,
+                                          "flt_coupon_period_tol", HELP["coupon_period_tol"],
+                                          integer=True)
+            period_stats = coupon_period_stats(df, coupon_period_tol)
+            period_options = [p for p, _, _ in period_stats]
+            period_labels = {p: short for p, short, _ in period_stats}
+            ensure_multiselect("flt_coupon_periods", period_options, [])
+            if period_options:
+                coupon_periods = coupon_period_buttons(period_options, period_labels,
+                                                       "flt_coupon_periods",
+                                                       HELP["coupon_periods"])
+                st.caption("В базе: " + " · ".join(
+                    f"{p} дн — {n}" for p, _, n in period_stats))
+            else:
+                coupon_periods = []
+                st.caption("MOEX не вернул период купона для текущей выборки.")
+
             max_lot_cost = num_input("Макс. сумма покупки лота (0 = без лимита)",
                                      0, 10_000_000, 1000, "flt_max_lot_cost",
                                      HELP["max_lot_cost"], integer=True)
+
         with r1c, st.expander("Сроки", expanded=False):
             min_days_maturity = num_input("Мин. дней до погашения", 0, 7300, 30,
                                           "flt_min_days_maturity", HELP["min_days_maturity"],
@@ -1860,7 +2111,7 @@ with st.expander("Фильтры под стратегию", expanded=True):
                                           help=HELP["only_with_offer"])
 
         r2a, r2b, r2c = st.columns(3)
-        with r2a, st.expander("Доходность и риск", expanded=False):
+        with r2a, st.expander("Доходность и риск", expanded=True):
             min_potential_return = num_input("Мин. потенциальная доходность, %", -100.0,
                                              100.0, 0.5, "flt_min_potential_return",
                                              HELP["min_potential_return"])
@@ -1874,6 +2125,14 @@ with st.expander("Фильтры под стратегию", expanded=True):
             max_ytm = num_input("Макс. YTM, %", -50.0, 200.0, 1.0, "flt_max_ytm", HELP["max_ytm"])
             min_net_ytm = num_input("Мин. чистый YTM, %", -50.0, 100.0, 0.5,
                                     "flt_min_net_ytm", HELP["min_net_ytm"])
+            st.markdown("<div class='filter-note'><b>Простая доходность</b> — купон "
+                        "плюс дисконт к номиналу, без реинвестирования. "
+                        "Границы работают как диапазон.</div>", unsafe_allow_html=True)
+            min_simple_yield = num_input("Мин. простая доходность, %", -100.0, 200.0, 0.5,
+                                         "flt_min_simple_yield", HELP["min_simple_yield"])
+            max_simple_yield = num_input("Макс. простая доходность, %", -100.0, 200.0, 0.5,
+                                         "flt_max_simple_yield", HELP["max_simple_yield"])
+
         with r2b, st.expander("Кредитное качество (X)", expanded=False):
             min_credit_quality = num_input("Мин. кредитное качество (X, из 10)", 0.0, 10.0,
                                            0.5, "flt_min_credit_quality",
@@ -1968,9 +2227,12 @@ with st.expander("Фильтры под стратегию", expanded=True):
 # ================== ПРИМЕНЕНИЕ ФИЛЬТРОВ ==================
 if min_spread > max_spread:
     min_spread, max_spread = max_spread, min_spread
+if min_simple_yield > max_simple_yield:
+    min_simple_yield, max_simple_yield = max_simple_yield, min_simple_yield
 
 opts = {
     "min_potential_return": min_potential_return,
+    "min_simple_yield": min_simple_yield, "max_simple_yield": max_simple_yield,
     "min_credit_quality": min_credit_quality, "min_issuer_quality": min_issuer_quality,
     "min_inside_q": min_inside_q, "min_outside_q": min_outside_q,
     "min_netdebt": min_netdebt, "min_liquidity_k": min_liquidity_k,
@@ -1990,6 +2252,7 @@ opts = {
     "min_spread": min_spread, "max_spread": max_spread,
     "max_lot_cost": max_lot_cost if max_lot_cost > 0 else 10 ** 12,
     "min_coupon": min_coupon, "max_coupon": max_coupon,
+    "coupon_periods": coupon_periods, "coupon_period_tol": coupon_period_tol,
     "list_levels": list_levels,
     "currency_filter": currency_filter or currency_options,
     "board_filter": board_filter or board_codes_present,
@@ -1998,7 +2261,7 @@ opts = {
 }
 filtered = apply_filters(df, opts)
 
-# ================== СИЛА АКТИВА (bulk, без запроса на каждую бумагу) ==================
+# ================== СИЛА АКТИВА ==================
 if not filtered.empty and rgbi_change_pct is not None:
     boards_for_hist = tuple(sorted(filtered["Режим торгов"].dropna().astype(str).unique()))
     with st.spinner("Загрузка исторических цен по доскам..."):
@@ -2008,8 +2271,23 @@ else:
     filtered = filtered.copy()
     filtered["Сила актива (Δ%)"] = np.nan
 
-# ================== ТИП ДОХОДНОСТИ / СОРТИРОВКА ==================
+# ================== РЕЗУЛЬТАТ ==================
 st.subheader(f"Найдено: {len(filtered)} из {len(df)}")
+
+chips = []
+if coupon_periods:
+    per_txt = ", ".join(f"{p} дн" + (f" ({period_labels[p]})" if period_labels.get(p) else "")
+                        for p in sorted(coupon_periods))
+    chips.append(f"<span class='chip'>Период купона: <b>{_html.escape(per_txt)}</b> "
+                 f"±{coupon_period_tol} дн</span>")
+if min_simple_yield > DEFAULT_MIN_SIMPLE_YIELD or max_simple_yield < DEFAULT_MAX_SIMPLE_YIELD:
+    chips.append(f"<span class='chip'>Простая доходность: "
+                 f"<b>{min_simple_yield:.2f} … {max_simple_yield:.2f}%</b></span>")
+if min_coupon > 0 or max_coupon < 50:
+    chips.append(f"<span class='chip'>Ставка купона: "
+                 f"<b>{min_coupon:.2f} … {max_coupon:.2f}%</b></span>")
+if chips:
+    st.markdown("<div class='chips'>" + "".join(chips) + "</div>", unsafe_allow_html=True)
 
 income_type = st.radio("Какую доходность показывать и по ней сортировать:",
                        list(INCOME_TYPE_MAP.keys()), horizontal=True,
@@ -2099,7 +2377,7 @@ if not filtered.empty:
     st.markdown("### Сводка")
     c1, c2, c3, c4 = st.columns(4)
     if income_col in filtered.columns:
-        s = filtered[income_col].dropna()
+        s = pd.to_numeric(filtered[income_col], errors="coerce").dropna()
         if not s.empty:
             c1.metric(f"Средняя {income_type}", f"{s.mean():.2f}%")
             c2.metric(f"Медиана {income_type}", f"{s.median():.2f}%")
@@ -2107,7 +2385,11 @@ if not filtered.empty:
         d = filtered["Дюрация, лет"].dropna()
         if not d.empty:
             c3.metric("Средняя дюрация", f"{d.mean():.2f} лет")
-            c4.metric("Медианная дюрация", f"{d.median():.2f} лет")
+    if "Период купона, дней" in filtered.columns:
+        p = pd.to_numeric(filtered["Период купона, дней"], errors="coerce").dropna()
+        if not p.empty:
+            c4.metric("Медианный период купона", f"{p.median():.0f} дн")
+
     cl, cr = st.columns(2)
     if "Группа надёжности" in filtered.columns:
         with cl:
@@ -2120,16 +2402,42 @@ if not filtered.empty:
             st.dataframe(filtered["Отрасль"].value_counts().head(15)
                          .rename("Количество"), use_container_width=True)
 
+    if "Период купона, дней" in filtered.columns:
+        per = pd.to_numeric(filtered["Период купона, дней"], errors="coerce")
+        bucket = pd.Series("н/д", index=filtered.index, dtype=object)
+        bucket[per.notna() & (per <= 31)] = "Ежемесячно (≤31)"
+        bucket[per.notna() & (per > 31) & (per <= 92)] = "Ежеквартально (32–92)"
+        bucket[per.notna() & (per > 92) & (per <= 183)] = "Раз в полгода (93–183)"
+        bucket[per.notna() & (per > 183)] = "Реже полугода (>183)"
+        st.caption("Структура денежного потока выборки")
+        st.dataframe(bucket.value_counts().rename("Количество бумаг"),
+                     use_container_width=True)
+
 # ================== СЛУЖЕБНЫЙ БЛОК ==================
 with st.expander("Справочная информация и служебные блоки", expanded=False):
     st.markdown("### Методология Доход.ру")
     st.markdown("""
 - YTM — всегда эффективная, из денежных потоков.
+- Простая доходность — купон плюс дисконт к номиналу, делённые на срок; без реинвестирования.
 - Флоатеры — моделирование по форвардной кривой, дюрация до следующего пересчёта.
 - Оферты — только настоящие, частичные игнорируются.
 - Качество эмитента (1–10): от 5 — высокое.
 - Сложность: 0 — фикс; 1 — put; 2 — амортизация; 3 — флоатер; 4 — индексируемый;
   5 — call; 6 — вечная; 7 — структурная.
+""")
+    st.markdown("### Период выплаты купона")
+    st.markdown("""
+Кнопки в блоке «Купон» переключаются независимо: можно оставить и 30, и 91 день.
+MOEX публикует фактические сроки, поэтому 91 и 92, 182 и 183, 364 и 365 попадают
+в одну кнопку при допуске ±1…3 дня. Допуск 0 — только точное совпадение.
+
+| Кнопка | Смысл | Что даёт |
+|---|---|---|
+| 7 / 14 дн | Очень частые выплаты | Быстрый оборот денег, редкость на рынке |
+| 30 дн | Ежемесячный купон | Ровный денежный поток, быстрое реинвестирование |
+| 61 / 91 дн | Раз в 2–3 месяца | Баланс потока и доходности |
+| 122 / 182 дн | Раз в 4–6 месяцев | Классика корпоративного долга |
+| 365 дн | Раз в год | Максимальная дюрация при прочих равных |
 """)
     st.markdown("### Легенда цветов")
     st.markdown("""
@@ -2140,6 +2448,7 @@ with st.expander("Справочная информация и служебны�
 | Потенциальная доходность | от ЦБ | — | < 0 |
 | YTM, Чистый YTM, YTC, Текущая, Простая | от ЦБ | — | < 0 |
 | Ставка купона | от ЦБ | — | < 5% |
+| Период купона, дней | до 31 | 93–183 | > 183 |
 | Дюрация, лет | до 1 | 1…макс | > макс |
 | Дисконт к номиналу | от 5% | — | < 0 |
 | Спред | < 0.2 | 0.5–1.0 | > 1.0 |
